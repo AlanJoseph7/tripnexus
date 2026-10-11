@@ -15,6 +15,7 @@ import { getRunTrace, storeRunTrace } from "../lib/trace-store";
 import { GroqNotConfiguredError, GroqRequestError } from "../trips/groq";
 import { AGENTS, DEMO_SCENARIOS, DESTINATIONS } from "../trips/data";
 import { adaptiveTripPlanner, PlannerInputError, PlannerOutputError } from "../trips/orchestrator";
+import { createOfflineTripPlan } from "../trips/offline-planner";
 import {
   completePlanningRun,
   createPlanningRun,
@@ -95,6 +96,20 @@ function categorizePlanningError(error: unknown): PlanningRunFailure {
   };
 }
 
+export function offlineFallbackCode(error: unknown) {
+  if (error instanceof GroqNotConfiguredError) return "GROQ_NOT_CONFIGURED";
+  if (!(error instanceof GroqRequestError)) return null;
+  return [
+    "GROQ_QUOTA_EXHAUSTED",
+    "GROQ_RATE_LIMITED",
+    "GROQ_TEMPORARILY_UNAVAILABLE",
+    "GROQ_TIMEOUT",
+    "GROQ_NETWORK_ERROR",
+  ].includes(error.code)
+    ? error.code
+    : null;
+}
+
 async function executePlanningRun(runId: string, request: unknown) {
   markPlanningRunStarted(runId);
   try {
@@ -102,6 +117,25 @@ async function executePlanningRun(runId: string, request: unknown) {
     storeRunTrace(result);
     completePlanningRun(runId, result);
   } catch (error) {
+    const fallbackCode = offlineFallbackCode(error);
+    if (fallbackCode) {
+      try {
+        const result = createOfflineTripPlan(request, runId, fallbackCode);
+        storeRunTrace(result);
+        completePlanningRun(runId, result);
+        logger.warn({ runId, fallbackCode }, "Completed trip planning with bundled offline fallback");
+        return;
+      } catch (fallbackError) {
+        logger.error(
+          {
+            runId,
+            fallbackCode,
+            fallbackErrorType: fallbackError instanceof Error ? fallbackError.name : "unknown",
+          },
+          "Bundled offline fallback could not complete",
+        );
+      }
+    }
     const failure = categorizePlanningError(error);
     if (failure.statusCode >= 500) {
       logger.error(

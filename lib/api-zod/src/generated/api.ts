@@ -158,7 +158,8 @@ export const GetPlanningRunResponse = zod.object({
   "result": zod.union([zod.object({
   "runId": zod.string(),
   "status": zod.enum(['approved', 'needs_attention', 'partial_failure']),
-  "mode": zod.enum(['groq_api']),
+  "mode": zod.enum(['groq_api', 'offline_fallback']),
+  "fallbackNotice": zod.string().optional(),
   "model": zod.string(),
   "request": zod.object({
   "destinationId": zod.string().min(getPlanningRunResponseResultOneRequestDestinationIdMin),
@@ -269,7 +270,7 @@ export const GetRunTraceParams = zod.object({
 
 export const GetRunTraceResponse = zod.object({
   "runId": zod.string(),
-  "mode": zod.enum(['groq_api']),
+  "mode": zod.enum(['groq_api', 'offline_fallback']),
   "events": zod.array(zod.object({
   "eventId": zod.string(),
   "runId": zod.string(),

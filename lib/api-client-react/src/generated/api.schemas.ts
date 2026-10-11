@@ -211,6 +211,7 @@ export type TraceExportMode = typeof TraceExportMode[keyof typeof TraceExportMod
 
 export const TraceExportMode = {
   groq_api: 'groq_api',
+  offline_fallback: 'offline_fallback',
 } as const;
 
 export interface TraceExport {
@@ -264,12 +265,14 @@ export type TripPlanResultMode = typeof TripPlanResultMode[keyof typeof TripPlan
 
 export const TripPlanResultMode = {
   groq_api: 'groq_api',
+  offline_fallback: 'offline_fallback',
 } as const;
 
 export interface TripPlanResult {
   runId: string;
   status: TripPlanResultStatus;
   mode: TripPlanResultMode;
+  fallbackNotice?: string;
   model: string;
   request: TripRequest;
   itinerary: ItineraryDay[];

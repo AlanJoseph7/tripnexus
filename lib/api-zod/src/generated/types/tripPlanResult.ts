@@ -19,6 +19,7 @@ export interface TripPlanResult {
   runId: string;
   status: TripPlanResultStatus;
   mode: TripPlanResultMode;
+  fallbackNotice?: string;
   model: string;
   request: TripRequest;
   itinerary: ItineraryDay[];

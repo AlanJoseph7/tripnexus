@@ -105,6 +105,7 @@ function AppWorkspace() {
   const result: TripPlanResult | null = planningRun.data?.status === 'completed'
     ? planningRun.data.result
     : null;
+  const offlinePlan = result?.mode === 'offline_fallback';
   const runFailure = planningRun.data?.status === 'failed' ? planningRun.data.error : null;
   const planningError = runFailure
     ? [`${runFailure.code} (${runFailure.statusCode}):`, runFailure.error, runFailure.setupInstruction].filter(Boolean).join(' ')
@@ -317,13 +318,14 @@ function AppWorkspace() {
           {result && <section className="results-area" aria-live="polite">
             <div className="result-header">
               <div><div className="section-kicker">YOUR TRIP BLUEPRINT <span>RUN {result.runId.slice(0, 8).toUpperCase()}</span></div><h2>{destinations.data?.find((d) => d.id === result.request.destinationId)?.name ?? 'Your next destination'} <i>awaits.</i></h2><p>{dateLabel(result.request.startDate)} — {dateLabel(result.request.endDate)} <span>·</span> {result.request.travelers} travelers <span>·</span> {result.request.pace} pace</p></div>
-               <div className="result-badges"><span className={`status-badge status-${result.status}`}>{result.status.replace('_', ' ')}</span><span className="model-badge"><Sparkles size={13} /> Groq · {result.model}</span></div>
+               <div className="result-badges"><span className={`status-badge status-${result.status}`}>{result.status.replace('_', ' ')}</span><span className="model-badge">{offlinePlan ? <CircleAlert size={13} /> : <Sparkles size={13} />}{offlinePlan ? ' Offline demo plan' : ` Groq · ${result.model}`}</span></div>
             </div>
+             {offlinePlan && <div className="offline-plan-banner" role="status" data-testid="offline-plan-banner"><CircleAlert size={18} /><div><b>Offline fallback plan</b><p>{result.fallbackNotice ?? 'This itinerary uses bundled local data only; it has no AI review, live prices, availability checks, or live forecast.'}</p></div></div>}
             <div className="summary-strip">
               <div><span>ESTIMATED TOTAL</span><b>{money(result.budgetAssessment.totalEstimatedInr)}</b><small className={result.budgetAssessment.withinBudget ? 'positive' : 'negative'}>{money(Math.abs(result.budgetAssessment.remainingInr))} {result.budgetAssessment.remainingInr >= 0 ? 'left in budget' : 'over budget'}</small></div>
               <div><span>TRIP LENGTH</span><b>{result.itinerary.length} <small>days</small></b><small>{result.itinerary.reduce((sum, day) => sum + day.activities.length, 0)} planned moments</small></div>
-              <div><span>CRITIC REVIEW</span><b>{result.criticReports.some((r) => r.decision === 'APPROVED') ? 'Reviewed' : 'Needs a look'}</b><small>{result.revisionCount} {result.revisionCount === 1 ? 'revision' : 'revisions'} · {result.criticReports.reduce((sum, report) => sum + report.issues.length, 0)} notes</small></div>
-               <div><span>PLANNING CREW</span><b>{result.agentsUsed.length || 5} <small>agents</small></b><small>Powered by Groq API</small></div>
+               <div><span>CRITIC REVIEW</span><b>{offlinePlan ? 'Not run' : result.criticReports.some((r) => r.decision === 'APPROVED') ? 'Reviewed' : 'Needs a look'}</b><small>{offlinePlan ? 'No live AI critic review' : `${result.revisionCount} ${result.revisionCount === 1 ? 'revision' : 'revisions'} · ${result.criticReports.reduce((sum, report) => sum + report.issues.length, 0)} notes`}</small></div>
+                <div><span>{offlinePlan ? 'PLANNING MODE' : 'PLANNING CREW'}</span><b>{offlinePlan ? 'Offline' : <>{result.agentsUsed.length || 5} <small>agents</small></>}</b><small>{offlinePlan ? 'Bundled local data · no AI agents' : 'Powered by Groq API'}</small></div>
             </div>
 
             <div className="result-grid">

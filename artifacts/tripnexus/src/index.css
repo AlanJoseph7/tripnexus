@@ -402,6 +402,10 @@
 .run-error p { margin: 4px 0; font-size: 11px; }
 .run-error span { color: #9a6c60; font-size: 9px; }
 .run-error > button { margin-left: auto; display: flex; align-items: center; gap: 6px; border: 1px solid #e3c5bc; border-radius: 3px; padding: 7px 9px; background: transparent; color: #8e4d43; font-size: 10px; cursor: pointer; white-space: nowrap; }
+.offline-plan-banner { margin: 15px 0; display: flex; align-items: flex-start; gap: 11px; padding: 14px 16px; border: 1px solid #d8c889; border-radius: 4px; background: #f8f3df; color: #64552b; }
+.offline-plan-banner > svg { flex: none; margin-top: 1px; }
+.offline-plan-banner b { font-size: 12px; }
+.offline-plan-banner p { margin: 4px 0 0; color: #75683e; font-size: 10px; line-height: 1.55; }
 .pending-panel { margin: 25px 0; padding: 23px; display: flex; align-items: center; gap: 15px; position: relative; overflow: hidden; border: 1px solid #e8e2d4; border-radius: 4px; background: #fcfaf4; }
 .pending-mark { width: 42px; height: 42px; flex: none; display: grid; place-items: center; background: #f4e8a8; color: #4e756a; border-radius: 50%; }
 .pending-panel h3 { margin: 5px 0 3px; color: #253a4f; font: 700 17px var(--app-font-serif); }

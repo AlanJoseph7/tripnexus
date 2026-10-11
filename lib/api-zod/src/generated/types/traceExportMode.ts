@@ -11,4 +11,5 @@ export type TraceExportMode = typeof TraceExportMode[keyof typeof TraceExportMod
 
 export const TraceExportMode = {
   groq_api: 'groq_api',
+  offline_fallback: 'offline_fallback',
 } as const;
