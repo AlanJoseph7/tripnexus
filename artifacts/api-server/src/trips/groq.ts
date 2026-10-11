@@ -9,7 +9,7 @@ const STRICT_JSON_SCHEMA_MODELS = new Set([
 ]);
 const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 45_000;
-const MAX_RATE_LIMIT_RETRY_WAIT_MS = 12_000;
+const MAX_RATE_LIMIT_RETRY_WAIT_MS = 20_000;
 const MAX_PROVIDER_COOLDOWN_MS = 60_000;
 const DEFAULT_RATE_LIMIT_RETRY_WAIT_MS = 1_200;
 const MAX_COMPLETION_TOKENS = 4_096;
@@ -126,8 +126,13 @@ function providerErrorInfo(body: string) {
     if (!error || typeof error !== "object") return {};
     const code = "code" in error && typeof error.code === "string" ? error.code : "";
     const message = "message" in error && typeof error.message === "string" ? error.message : "";
+    const isProviderRateLimitCode = /rate[_ -]?limit[_ -]?exceeded|too[_ -]?many[_ -]?requests/i.test(code);
     return {
-      quotaExhausted: /insufficient[_ -]quota|billing|credit|quota exhausted/i.test(`${code} ${message}`),
+      quotaExhausted:
+        !isProviderRateLimitCode &&
+        /insufficient[_ -]quota|billing|credits? (?:balance )?(?:exhausted|depleted)|quota exhausted/i.test(
+          `${code} ${message}`,
+        ),
       bodyRetryAfterMs: parseDurationMs(message.match(/try again in\s+([\d.]+\s*(?:ms|s|m|h))/i)?.[1]),
     };
   } catch {

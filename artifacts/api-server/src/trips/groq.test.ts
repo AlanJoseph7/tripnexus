@@ -83,9 +83,14 @@ describe("Groq request recovery", () => {
     expect(events.at(-1)).toEqual({ attempt: 3, status: "completed" });
   });
 
-  it("honors Groq's short Retry-After value and retries only once", async () => {
+  it("waits for Groq's transient rate-limit reset and retries only once", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(response(429, { error: { message: "Rate limit reached" } }, { "Retry-After": "1" }))
+      .mockResolvedValueOnce(response(429, {
+        error: {
+          code: "rate_limit_exceeded",
+          message: "Rate limit reached; this quota window resets soon. Try again in 16s.",
+        },
+      }, { "Retry-After": "16" }))
       .mockResolvedValueOnce(response(200, { choices: [{ message: { content: '{"ready":true}' } }] }));
     globalThis.fetch = fetchMock as typeof fetch;
 
