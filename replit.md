@@ -1,15 +1,16 @@
-# [Project name]
+# TripNexus
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+TripNexus creates date-aware travel itineraries with a coordinated AI planning crew and lets travelers inspect each planning run.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/tripnexus run dev` — run the TripNexus web app
+- `pnpm --filter @workspace/api-server run dev` — run the TripNexus API server
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- API planning requires `GROQ_API_KEY` in Replit Secrets. `GROQ_MODEL` is optional and defaults to `openai/gpt-oss-20b`.
+- Health, destination, agent, and demo endpoints work without the Groq secret; generating a live itinerary does not.
 
 ## Stack
 
@@ -22,23 +23,26 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/tripnexus/` — traveler-facing web app
+- `artifacts/api-server/` — Express API, planning runs, Groq client, and local travel reference data
+- `lib/api-spec/openapi.yaml` — API contract and source for generated client/schema packages
+- `lib/api-client-react/`, `lib/api-zod/` — generated frontend hooks and API validation schemas
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The browser calls the API under `/api`; only the server communicates with Groq.
+- Planning runs and traces are held in process memory and expire on server restart.
+- Provider calls are serialized and respond to Groq reset guidance to reduce request bursts.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Travelers can explore supported destinations, load sample trips, submit a planning request, watch its status, inspect agent messages and traces, and export the trace or project documentation.
 
-## User preferences
+## Deployment notes
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Publish the TripNexus web artifact and API Server together.
+- Add `GROQ_API_KEY` in Replit Secrets before expecting live trip planning to complete.
+- Groq account credits, model access, and provider rate limits remain controlled by Groq; code can back off but cannot increase account quota.
 
 ## Pointers
 

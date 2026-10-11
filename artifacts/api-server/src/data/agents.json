@@ -1,0 +1,7 @@
+[
+  {"id":"trip_manager","name":"Trip Manager","role":"Orchestrator","responsibility":"Turns the request into a bounded work plan, assigns specialists, and routes critic feedback to the responsible agent."},
+  {"id":"destination_agent","name":"Destination Agent","role":"Activities and places","responsibility":"Selects locally catalogued places, builds day-by-day activities, and keeps each day's route geographically sensible."},
+  {"id":"budget_agent","name":"Budget Agent","role":"Cost analyst","responsibility":"Checks a local per-person cost estimate against the user's total group budget and explains cost trade-offs."},
+  {"id":"weather_agent","name":"Weather Agent","role":"Seasonal conditions","responsibility":"Uses bundled typical-climate data to identify weather-sensitive activities and indoor alternatives."},
+  {"id":"critic_agent","name":"Critic Agent","role":"Independent reviewer","responsibility":"Checks itinerary coverage, budget arithmetic, seasonal risks and constraint conflicts; can reject and request targeted re-planning."}
+]
