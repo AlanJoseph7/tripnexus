@@ -18,14 +18,14 @@ describe("planning run store", () => {
 
     failPlanningRun(runId, {
       statusCode: 502,
-      code: "GROQ_REQUEST_FAILED",
-      error: "Groq could not return a valid structured response. Please retry.",
+      code: "GEMINI_REQUEST_FAILED",
+      error: "Gemini could not return a valid structured response. Please retry.",
       setupInstruction: null,
     });
     expect(getPlanningRun(runId)).toMatchObject({
       runId,
       status: "failed",
-      error: { statusCode: 502, code: "GROQ_REQUEST_FAILED" },
+      error: { statusCode: 502, code: "GEMINI_REQUEST_FAILED" },
     });
   });
 });

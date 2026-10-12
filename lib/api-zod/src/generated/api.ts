@@ -14,9 +14,9 @@ import * as zod from 'zod';
  */
 export const HealthCheckResponse = zod.object({
   "status": zod.string(),
-  "mode": zod.enum(['groq_api']),
+  "mode": zod.enum(['gemini_api']),
   "model": zod.string(),
-  "groqConfigured": zod.boolean()
+  "geminiConfigured": zod.boolean()
 })
 
 
@@ -89,7 +89,7 @@ export const GetDemoScenariosResponse = zod.array(GetDemoScenariosResponseItem)
 
 
 /**
- * Run adaptive travel planning using the Groq API and bundled local reference data.
+ * Run adaptive travel planning using Gemini Flash and bundled local reference data.
  * @summary Run adaptive multi-agent trip planning
  */
 export const planTripBodyDestinationIdMin = 2;
@@ -158,7 +158,7 @@ export const GetPlanningRunResponse = zod.object({
   "result": zod.union([zod.object({
   "runId": zod.string(),
   "status": zod.enum(['approved', 'needs_attention', 'partial_failure']),
-  "mode": zod.enum(['groq_api', 'offline_fallback']),
+  "mode": zod.enum(['gemini_api', 'offline_fallback']),
   "fallbackNotice": zod.string().optional(),
   "model": zod.string(),
   "request": zod.object({
@@ -270,7 +270,7 @@ export const GetRunTraceParams = zod.object({
 
 export const GetRunTraceResponse = zod.object({
   "runId": zod.string(),
-  "mode": zod.enum(['groq_api', 'offline_fallback']),
+  "mode": zod.enum(['gemini_api', 'offline_fallback']),
   "events": zod.array(zod.object({
   "eventId": zod.string(),
   "runId": zod.string(),

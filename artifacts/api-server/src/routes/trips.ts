@@ -12,7 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import { getRunTrace, storeRunTrace } from "../lib/trace-store";
-import { GroqNotConfiguredError, GroqRequestError } from "../trips/groq";
+import { GeminiNotConfiguredError, GeminiRequestError } from "../trips/gemini";
 import { AGENTS, DEMO_SCENARIOS, DESTINATIONS } from "../trips/data";
 import { adaptiveTripPlanner, PlannerInputError, PlannerOutputError } from "../trips/orchestrator";
 import { createOfflineTripPlan } from "../trips/offline-planner";
@@ -64,15 +64,15 @@ function categorizePlanningError(error: unknown): PlanningRunFailure {
       setupInstruction: null,
     };
   }
-  if (error instanceof GroqNotConfiguredError) {
+  if (error instanceof GeminiNotConfiguredError) {
     return {
       statusCode: 503,
-      code: "GROQ_NOT_CONFIGURED",
-      error: "Trip planning needs a Groq API key configured on the server.",
-      setupInstruction: "Add GROQ_API_KEY in Replit Secrets, then restart the API Server.",
+      code: "GEMINI_NOT_CONFIGURED",
+      error: "Trip planning needs a Gemini API key configured on the server.",
+      setupInstruction: "Add GEMINI_API_KEY in Replit Secrets, then restart the API Server.",
     };
   }
-  if (error instanceof GroqRequestError) {
+  if (error instanceof GeminiRequestError) {
     return {
       statusCode: error.statusCode,
       code: error.code,
@@ -97,14 +97,14 @@ function categorizePlanningError(error: unknown): PlanningRunFailure {
 }
 
 export function offlineFallbackCode(error: unknown) {
-  if (error instanceof GroqNotConfiguredError) return "GROQ_NOT_CONFIGURED";
-  if (!(error instanceof GroqRequestError)) return null;
+  if (error instanceof GeminiNotConfiguredError) return "GEMINI_NOT_CONFIGURED";
+  if (!(error instanceof GeminiRequestError)) return null;
   return [
-    "GROQ_QUOTA_EXHAUSTED",
-    "GROQ_RATE_LIMITED",
-    "GROQ_TEMPORARILY_UNAVAILABLE",
-    "GROQ_TIMEOUT",
-    "GROQ_NETWORK_ERROR",
+    "GEMINI_QUOTA_EXHAUSTED",
+    "GEMINI_RATE_LIMITED",
+    "GEMINI_TEMPORARILY_UNAVAILABLE",
+    "GEMINI_TIMEOUT",
+    "GEMINI_NETWORK_ERROR",
   ].includes(error.code)
     ? error.code
     : null;

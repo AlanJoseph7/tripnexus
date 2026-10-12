@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { GetPlanningRunResponse, PlanTripBody } from "@workspace/api-zod";
 import { z } from "zod";
 import { AGENTS, findDestination, type Place } from "./data";
-import { DEFAULT_GROQ_MODEL, groqModel } from "./groq";
+import { DEFAULT_GEMINI_MODEL, geminiModel } from "./gemini";
 import { RunTrace } from "./trace";
 import {
   executeLocalTool,
@@ -483,7 +483,7 @@ async function callAgent<T>(
       agentId,
       eventType: "model_call",
       action: `attempt_${event.attempt}`,
-      summary: `${agentId} Groq model call ${event.status} (attempt ${event.attempt}).`,
+      summary: `${agentId} Gemini model call ${event.status} (attempt ${event.attempt}).`,
       status: event.status,
     });
     },
@@ -921,7 +921,7 @@ function makeManagerPlanPrompt(request: TripRequest, toolCatalog: ReturnType<typ
 }
 
 export class AdaptiveTripPlanner {
-  constructor(private readonly model: JsonModel = groqModel) {}
+  constructor(private readonly model: JsonModel = geminiModel) {}
 
   async plan(rawRequest: unknown, requestedRunId?: string): Promise<TripPlanResult> {
     const request = validateRequest(rawRequest);
@@ -1204,8 +1204,8 @@ export class AdaptiveTripPlanner {
     const result = {
       runId,
       status: criticReport.decision === "APPROVED" ? "approved" : "needs_attention",
-      mode: "groq_api",
-      model: process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL,
+      mode: "gemini_api",
+      model: process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL,
       request,
       itinerary,
       budgetAssessment,

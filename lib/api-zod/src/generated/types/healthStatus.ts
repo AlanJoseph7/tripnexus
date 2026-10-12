@@ -11,5 +11,5 @@ export interface HealthStatus {
   status: string;
   mode: HealthStatusMode;
   model: string;
-  groqConfigured: boolean;
+  geminiConfigured: boolean;
 }

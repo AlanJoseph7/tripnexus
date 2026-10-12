@@ -376,7 +376,7 @@ export const getPlanTripUrl = () => {
 }
 
 /**
- * Run adaptive travel planning using the Groq API and bundled local reference data.
+ * Run adaptive travel planning using Gemini Flash and bundled local reference data.
  * @summary Run adaptive multi-agent trip planning
  */
 export const planTrip = async (tripRequest: TripRequest, options?: Parameters<typeof customFetch>[1]): Promise<PlanTripAccepted> => {

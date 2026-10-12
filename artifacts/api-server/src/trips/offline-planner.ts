@@ -178,7 +178,7 @@ export function createOfflineTripPlan(
     agentId: "trip_manager",
     eventType: "offline_fallback",
     action: "use_bundled_data",
-    summary: `Live Groq planning was unavailable (${fallbackCode}). A deterministic itinerary was built from bundled local data; no AI critic ran.`,
+    summary: `Live Gemini planning was unavailable (${fallbackCode}). A deterministic itinerary was built from bundled local data; no AI critic ran.`,
   });
   trace.event({
     agentId: "trip_manager",
@@ -187,7 +187,7 @@ export function createOfflineTripPlan(
     summary: "Budget and typical-climate estimates came from bundled data, not live prices or a weather forecast.",
   });
 
-  const fallbackNotice = `Live Groq planning was unavailable (${fallbackCode}). This deterministic demo plan uses bundled destination data only; it has no AI review, live prices, availability checks, or live forecast.`;
+  const fallbackNotice = `Live Gemini planning was unavailable (${fallbackCode}). This deterministic demo plan uses bundled destination data only; it has no AI review, live prices, availability checks, or live forecast.`;
   const response = GetPlanningRunResponse.parse({
     runId,
     status: "completed",

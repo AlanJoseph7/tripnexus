@@ -9,14 +9,14 @@ export type HealthStatusMode = typeof HealthStatusMode[keyof typeof HealthStatus
 
 
 export const HealthStatusMode = {
-  groq_api: 'groq_api',
+  gemini_api: 'gemini_api',
 } as const;
 
 export interface HealthStatus {
   status: string;
   mode: HealthStatusMode;
   model: string;
-  groqConfigured: boolean;
+  geminiConfigured: boolean;
 }
 
 export interface ErrorResponse {
@@ -210,7 +210,7 @@ export type TraceExportMode = typeof TraceExportMode[keyof typeof TraceExportMod
 
 
 export const TraceExportMode = {
-  groq_api: 'groq_api',
+  gemini_api: 'gemini_api',
   offline_fallback: 'offline_fallback',
 } as const;
 
@@ -264,7 +264,7 @@ export type TripPlanResultMode = typeof TripPlanResultMode[keyof typeof TripPlan
 
 
 export const TripPlanResultMode = {
-  groq_api: 'groq_api',
+  gemini_api: 'gemini_api',
   offline_fallback: 'offline_fallback',
 } as const;
 

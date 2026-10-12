@@ -159,7 +159,7 @@ describe("adaptive multi-agent planner", () => {
     }, "queued-run-id");
 
     expect(result.runId).toBe("queued-run-id");
-    expect(result.mode).toBe("groq_api");
+    expect(result.mode).toBe("gemini_api");
     expect(result.status).toBe("approved");
     expect(result.revisionCount).toBe(1);
     expect(result.itinerary).toHaveLength(2);
@@ -190,7 +190,7 @@ describe("adaptive multi-agent planner", () => {
     ).rejects.toThrow(/supported destinations/i);
   });
 
-  it("fills a missing Groq weather note from the bundled climate data", async () => {
+  it("fills a missing Gemini weather note from the bundled climate data", async () => {
     const planner = new AdaptiveTripPlanner(new FixtureModel(undefined, true));
     const result = await planner.plan({
       destinationId: "jaipur",

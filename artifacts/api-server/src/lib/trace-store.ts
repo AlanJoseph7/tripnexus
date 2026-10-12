@@ -1,10 +1,10 @@
-import type { GroqMode, TripPlanResult } from "../trips/types";
+import type { PlannerMode, TripPlanResult } from "../trips/types";
 
 interface StoredTrace {
   savedAt: number;
   value: {
     runId: string;
-    mode: GroqMode;
+    mode: PlannerMode;
     events: TripPlanResult["executionTrace"];
     messages: TripPlanResult["messages"];
   };

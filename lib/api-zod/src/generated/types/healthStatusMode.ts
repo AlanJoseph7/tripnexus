@@ -10,5 +10,5 @@ export type HealthStatusMode = typeof HealthStatusMode[keyof typeof HealthStatus
 
 
 export const HealthStatusMode = {
-  groq_api: 'groq_api',
+  gemini_api: 'gemini_api',
 } as const;

@@ -73,7 +73,7 @@ paths:
       operationId: planTrip
       tags: [trip-planning]
       summary: Run adaptive multi-agent trip planning
-      description: Run adaptive travel planning using the Groq API and bundled local reference data.
+      description: Run adaptive travel planning using Gemini Flash and bundled local reference data.
       requestBody:
         required: true
         content:
@@ -175,16 +175,16 @@ components:
           type: string
         mode:
           type: string
-          enum: [groq_api]
+          enum: [gemini_api]
         model:
           type: string
-        groqConfigured:
+        geminiConfigured:
           type: boolean
       required:
         - status
         - mode
         - model
-        - groqConfigured
+        - geminiConfigured
     ErrorResponse:
       type: object
       properties:
@@ -459,7 +459,7 @@ components:
           type: string
         mode:
           type: string
-          enum: [groq_api, offline_fallback]
+          enum: [gemini_api, offline_fallback]
         events:
           type: array
           items:
@@ -517,7 +517,7 @@ components:
           enum: [approved, needs_attention, partial_failure]
         mode:
           type: string
-          enum: [groq_api, offline_fallback]
+          enum: [gemini_api, offline_fallback]
         fallbackNotice:
           type: string
         model:
