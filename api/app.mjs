@@ -32904,12 +32904,18 @@ var logger = (0, import_pino.default)({
 });
 
 // src/trips/groq.ts
-var DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
+var DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
+var GROQ_FALLBACK_MODELS = [
+  "openai/gpt-oss-120b",
+  "qwen/qwen3.8-27b",
+  "openai/gpt-oss-20b"
+];
 var STRICT_JSON_SCHEMA_MODELS = /* @__PURE__ */ new Set([
   "llama-3.3-70b-versatile",
   "llama-3.1-8b-instant",
   "openai/gpt-oss-20b",
-  "openai/gpt-oss-120b"
+  "openai/gpt-oss-120b",
+  "qwen/qwen3.8-27b"
 ]);
 var GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
 var REQUEST_TIMEOUT_MS = 45e3;
@@ -33118,108 +33124,175 @@ function isTimeout(error) {
   return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
 }
 var GroqJsonModel = class {
+  activeModel = process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
+  modelCooldowns = /* @__PURE__ */ new Map();
   get model() {
-    return process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
+    return this.activeModel;
   }
-  providerCooldownUntil = 0;
+  getCandidateModels() {
+    if (process.env.GROQ_DISABLE_MODEL_FALLBACK === "true") {
+      return [process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL];
+    }
+    const configured = process.env.GROQ_MODEL?.trim();
+    const list = configured ? [configured, ...GROQ_FALLBACK_MODELS.filter((m) => m !== configured)] : [...GROQ_FALLBACK_MODELS];
+    const now = Date.now();
+    return list.sort((a, b) => {
+      const aCd = this.modelCooldowns.get(a) ?? 0;
+      const bCd = this.modelCooldowns.get(b) ?? 0;
+      return (aCd > now ? 1 : 0) - (bCd > now ? 1 : 0);
+    });
+  }
   async generateJson(runId, agentId, systemInstruction, prompt, schema, responseJsonSchema, onCallEvent) {
     const apiKey = process.env.GROQ_API_KEY?.trim();
     if (!apiKey) throw new GroqNotConfiguredError();
     nextCall(runId, agentId);
-    let lastFailure;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      try {
-        const parsed = await requestGate.run(async () => {
-          const remainingCooldownMs = this.providerCooldownUntil - Date.now();
-          if (remainingCooldownMs > 0) await wait(remainingCooldownMs);
-          onCallEvent?.({ attempt: attempt + 1, status: "started" });
-          const response = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              model: this.model,
-              messages: [
-                { role: "system", content: systemInstruction },
-                { role: "user", content: prompt }
-              ],
-              response_format: {
-                type: "json_schema",
-                json_schema: {
-                  name: agentId,
-                  strict: STRICT_JSON_SCHEMA_MODELS.has(this.model),
-                  schema: responseJsonSchema
+    const candidateModels = this.getCandidateModels();
+    let overallLastFailure;
+    for (let modelIdx = 0; modelIdx < candidateModels.length; modelIdx += 1) {
+      const currentModel = candidateModels[modelIdx];
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const parsed = await requestGate.run(async () => {
+            const now = Date.now();
+            const cdUntil = this.modelCooldowns.get(currentModel) ?? 0;
+            if (cdUntil > now) {
+              const remainingCooldownMs = cdUntil - now;
+              if (modelIdx + 1 < candidateModels.length) {
+                const nextModel = candidateModels[modelIdx + 1];
+                const nextCd = this.modelCooldowns.get(nextModel) ?? 0;
+                if (nextCd <= now) {
+                  throw new ProviderHttpError(
+                    429,
+                    remainingCooldownMs,
+                    false,
+                    false,
+                    "rate_limit_exceeded",
+                    `Model "${currentModel}" is on cooldown; switching to "${nextModel}"`
+                  );
                 }
+              }
+              if (remainingCooldownMs > 0 && remainingCooldownMs <= 5e3) {
+                await wait(remainingCooldownMs);
+              }
+            }
+            onCallEvent?.({ attempt: attempt + 1, status: "started" });
+            const response = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
               },
-              temperature: 0.2,
-              max_completion_tokens: MAX_COMPLETION_TOKENS
-            }),
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-          });
-          if (!response.ok) {
-            const responseBody = await response.text();
-            const errorInfo = providerErrorInfo(responseBody);
-            const retryAfterMs = responseRetryAfterMs(response.headers, errorInfo.bodyRetryAfterMs);
-            if (response.status === 429 && !errorInfo.quotaExhausted && retryAfterMs && retryAfterMs > 0) {
-              this.providerCooldownUntil = Math.max(
-                this.providerCooldownUntil,
-                Date.now() + Math.min(retryAfterMs, MAX_PROVIDER_COOLDOWN_MS)
+              body: JSON.stringify({
+                model: currentModel,
+                messages: [
+                  { role: "system", content: systemInstruction },
+                  { role: "user", content: prompt }
+                ],
+                response_format: {
+                  type: "json_schema",
+                  json_schema: {
+                    name: agentId,
+                    strict: STRICT_JSON_SCHEMA_MODELS.has(currentModel),
+                    schema: responseJsonSchema
+                  }
+                },
+                temperature: 0.2,
+                max_completion_tokens: MAX_COMPLETION_TOKENS
+              }),
+              signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+            });
+            if (!response.ok) {
+              const responseBody = await response.text();
+              const errorInfo = providerErrorInfo(responseBody);
+              const retryAfterMs = responseRetryAfterMs(response.headers, errorInfo.bodyRetryAfterMs);
+              if (response.status === 429 && retryAfterMs && retryAfterMs > 0) {
+                this.modelCooldowns.set(currentModel, Date.now() + Math.min(retryAfterMs, MAX_PROVIDER_COOLDOWN_MS));
+              } else if (response.status === 429) {
+                this.modelCooldowns.set(currentModel, Date.now() + 3e4);
+              }
+              throw new ProviderHttpError(
+                response.status,
+                retryAfterMs,
+                errorInfo.quotaExhausted,
+                errorInfo.isJsonValidateFailed,
+                errorInfo.code,
+                errorInfo.message
               );
             }
-            throw new ProviderHttpError(
-              response.status,
-              retryAfterMs,
-              errorInfo.quotaExhausted,
-              errorInfo.isJsonValidateFailed,
-              errorInfo.code,
-              errorInfo.message
-            );
+            const payload = await response.json();
+            const envelope = external_exports.object({
+              choices: external_exports.array(external_exports.object({
+                message: external_exports.object({
+                  content: external_exports.string().nullable().optional()
+                })
+              })).min(1)
+            }).parse(payload);
+            const text = envelope.choices[0]?.message.content;
+            if (!text) throw new Error("empty response");
+            const validated = schema.parse(readJson(text));
+            onCallEvent?.({ attempt: attempt + 1, status: "completed" });
+            this.activeModel = currentModel;
+            await wait(200);
+            return validated;
+          });
+          logger.info({ runId, agentId, model: currentModel, attempt: attempt + 1 }, "Groq agent response validated");
+          return parsed;
+        } catch (error) {
+          onCallEvent?.({ attempt: attempt + 1, status: "failed" });
+          overallLastFailure = error;
+          if (error instanceof ProviderHttpError && error.quotaExhausted) {
+            break;
           }
-          const payload = await response.json();
-          const envelope = external_exports.object({
-            choices: external_exports.array(external_exports.object({
-              message: external_exports.object({
-                content: external_exports.string().nullable().optional()
-              })
-            })).min(1)
-          }).parse(payload);
-          const text = envelope.choices[0]?.message.content;
-          if (!text) throw new Error("empty response");
-          const validated = schema.parse(readJson(text));
-          onCallEvent?.({ attempt: attempt + 1, status: "completed" });
-          return validated;
-        });
-        logger.info({ runId, agentId, model: this.model, attempt: attempt + 1 }, "Groq agent response validated");
-        return parsed;
-      } catch (error) {
-        onCallEvent?.({ attempt: attempt + 1, status: "failed" });
-        lastFailure = error;
-        const delayMs = retryDelayMs(attempt, error);
-        const rateLimitWaitIsShortEnough = providerStatus(error) !== 429 || delayMs <= MAX_RATE_LIMIT_RETRY_WAIT_MS;
-        if (attempt + 1 < retryLimit(error) && isRetryableFailure(error) && rateLimitWaitIsShortEnough) {
-          logger.warn(
-            {
-              runId,
-              agentId,
-              model: this.model,
-              attempt: attempt + 1,
-              nextAttempt: attempt + 2,
-              retryDelayMs: delayMs,
-              ...failureDetails(error)
-            },
-            "Groq response failed; retrying"
-          );
-          await wait(delayMs);
-          continue;
+          if (providerStatus(error) === 401 || providerStatus(error) === 403) {
+            break;
+          }
+          const status2 = providerStatus(error);
+          if ((status2 === 429 || status2 === 404) && modelIdx + 1 < candidateModels.length) {
+            const nextModel = candidateModels[modelIdx + 1];
+            logger.warn(
+              {
+                runId,
+                agentId,
+                failedModel: currentModel,
+                nextModel,
+                status: status2,
+                attempt: attempt + 1
+              },
+              "Groq model hit rate limit or is unavailable; failing over to alternative model in pool"
+            );
+            break;
+          }
+          const delayMs = retryDelayMs(attempt, error);
+          const rateLimitWaitIsShortEnough = status2 !== 429 || delayMs <= MAX_RATE_LIMIT_RETRY_WAIT_MS;
+          if (attempt + 1 < retryLimit(error) && isRetryableFailure(error) && rateLimitWaitIsShortEnough) {
+            logger.warn(
+              {
+                runId,
+                agentId,
+                model: currentModel,
+                attempt: attempt + 1,
+                nextAttempt: attempt + 2,
+                retryDelayMs: delayMs,
+                ...failureDetails(error)
+              },
+              "Groq response failed; retrying"
+            );
+            await wait(delayMs);
+            continue;
+          }
+          break;
         }
+      }
+      if (overallLastFailure instanceof ProviderHttpError && overallLastFailure.quotaExhausted) {
+        break;
+      }
+      if (providerStatus(overallLastFailure) === 401 || providerStatus(overallLastFailure) === 403) {
         break;
       }
     }
-    logger.error({ runId, agentId, model: this.model, ...failureDetails(lastFailure) }, "Groq request failed");
-    if (lastFailure instanceof GroqNotConfiguredError) throw lastFailure;
-    const status = providerStatus(lastFailure);
+    logger.error({ runId, agentId, model: this.model, ...failureDetails(overallLastFailure) }, "Groq request failed");
+    if (overallLastFailure instanceof GroqNotConfiguredError) throw overallLastFailure;
+    const status = providerStatus(overallLastFailure);
     if (status === 401 || status === 403) {
       throw new GroqRequestError(
         "Groq rejected the API key or its access. Replace GROQ_API_KEY with a valid key in your .env or environment variables.",
@@ -33235,14 +33308,14 @@ var GroqJsonModel = class {
       );
     }
     if (status === 429) {
-      if (providerQuotaExhausted(lastFailure)) {
+      if (providerQuotaExhausted(overallLastFailure)) {
         throw new GroqRequestError(
           "Groq reports that this account has exhausted its available quota or credits. Check the account billing and model limits before retrying.",
           503,
           "GROQ_QUOTA_EXHAUSTED"
         );
       }
-      const retryAfterMs = providerRetryAfterMs(lastFailure);
+      const retryAfterMs = providerRetryAfterMs(overallLastFailure);
       const waitInstruction = retryAfterMs && retryAfterMs > MAX_RATE_LIMIT_RETRY_WAIT_MS ? ` Wait about ${Math.ceil(retryAfterMs / 1e3)} seconds before trying again.` : " Wait briefly before trying again.";
       throw new GroqRequestError(
         `Groq is rate-limiting requests.${waitInstruction} If the limit persists, review the model's request and token limits.`,
@@ -33257,7 +33330,7 @@ var GroqJsonModel = class {
         "GROQ_TEMPORARILY_UNAVAILABLE"
       );
     }
-    if (lastFailure instanceof external_exports.ZodError || lastFailure instanceof SyntaxError || lastFailure instanceof Error && lastFailure.message === "empty response") {
+    if (overallLastFailure instanceof external_exports.ZodError || overallLastFailure instanceof SyntaxError || overallLastFailure instanceof Error && overallLastFailure.message === "empty response") {
       throw new GroqRequestError(
         "Groq returned a response that did not match the required trip format. Please try again.",
         502,
@@ -33265,7 +33338,7 @@ var GroqJsonModel = class {
       );
     }
     if (status === 400) {
-      const detail = lastFailure instanceof ProviderHttpError && lastFailure.providerMessage ? `: ${lastFailure.providerMessage}` : ". Check that GROQ_MODEL supports JSON-schema outputs.";
+      const detail = overallLastFailure instanceof ProviderHttpError && overallLastFailure.providerMessage ? `: ${overallLastFailure.providerMessage}` : ". Check that GROQ_MODEL supports JSON-schema outputs.";
       throw new GroqRequestError(
         `Groq rejected the structured-output request${detail}`,
         502,
@@ -34365,7 +34438,14 @@ async function generateItinerary(model, trace, request, candidates, currentItine
         endDate: formatDate(request.endDate),
         days: dates
       },
-      allowedPlaces: candidates,
+      allowedPlaces: candidates.map((place) => ({
+        id: place.id,
+        name: place.name,
+        category: place.category,
+        area: place.area,
+        setting: place.setting,
+        costInr: place.estimatedCostInr
+      })),
       currentItinerary: currentItinerary?.map((day) => ({
         ...day,
         date: formatDate(day.date)
@@ -34477,7 +34557,12 @@ async function generateWeatherAssessment(model, trace, request, itinerary, revis
     {
       task,
       climateEstimate: climate,
-      indoorOptions,
+      indoorOptions: indoorOptions.map((place) => ({
+        id: place.id,
+        name: place.name,
+        category: place.category,
+        area: place.area
+      })),
       requiredDates: climate.map((day) => day.date),
       itinerary: itinerary.map((day) => ({
         date: formatDate(day.date),

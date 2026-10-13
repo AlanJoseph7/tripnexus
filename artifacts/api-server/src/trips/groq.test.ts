@@ -15,6 +15,7 @@ describe("Groq request recovery", () => {
 
   beforeEach(() => {
     process.env.GROQ_API_KEY = "unit-test-key";
+    process.env.GROQ_DISABLE_MODEL_FALLBACK = "true";
     delete process.env.GROQ_MODEL;
     vi.useFakeTimers();
     // Each unit test should start with an expired provider-wide cooldown.
@@ -26,6 +27,7 @@ describe("Groq request recovery", () => {
     globalThis.fetch = originalFetch;
     delete process.env.GROQ_API_KEY;
     delete process.env.GROQ_MODEL;
+    delete process.env.GROQ_DISABLE_MODEL_FALLBACK;
   });
 
   it("sends a server-side chat-completion request with the configured structured schema", async () => {
@@ -50,7 +52,7 @@ describe("Groq request recovery", () => {
     expect(url).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer unit-test-key");
     const body = JSON.parse(String(init.body));
-    expect(body.model).toBe("openai/gpt-oss-20b");
+    expect(body.model).toBe("openai/gpt-oss-120b");
     expect(body.response_format.json_schema.name).toBe("trip_manager");
     expect(body.response_format.json_schema.strict).toBe(true);
     expect(body.response_format.json_schema.schema.required).toEqual(["ready"]);
@@ -224,5 +226,32 @@ describe("Groq request recovery", () => {
       { type: "object" },
     )).rejects.toMatchObject({ name: "GroqNotConfiguredError" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("automatically fails over to alternative model when primary model is rate limited (HTTP 429)", async () => {
+    delete process.env.GROQ_DISABLE_MODEL_FALLBACK;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(429, {
+        error: { code: "rate_limit_exceeded", message: "Rate limit reached for openai/gpt-oss-120b" },
+      }))
+      .mockResolvedValueOnce(response(200, { choices: [{ message: { content: '{"ready":true}' } }] }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const pending = new GroqJsonModel().generateJson(
+      "model-failover-test",
+      "trip_manager",
+      "Return JSON.",
+      "{}",
+      z.object({ ready: z.boolean() }),
+      { type: "object" },
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toEqual({ ready: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, firstInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(String(firstInit.body)).model).toBe("openai/gpt-oss-120b");
+    expect(JSON.parse(String(secondInit.body)).model).toBe("qwen/qwen3.8-27b");
   });
 });

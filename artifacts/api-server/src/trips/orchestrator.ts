@@ -588,7 +588,14 @@ async function generateItinerary(
         endDate: formatDate(request.endDate),
         days: dates,
       },
-      allowedPlaces: candidates,
+      allowedPlaces: candidates.map((place) => ({
+        id: place.id,
+        name: place.name,
+        category: place.category,
+        area: place.area,
+        setting: place.setting,
+        costInr: place.estimatedCostInr,
+      })),
       currentItinerary: currentItinerary?.map((day) => ({
         ...day,
         date: formatDate(day.date),
@@ -721,7 +728,12 @@ async function generateWeatherAssessment(
     {
       task,
       climateEstimate: climate,
-      indoorOptions,
+      indoorOptions: indoorOptions.map((place) => ({
+        id: place.id,
+        name: place.name,
+        category: place.category,
+        area: place.area,
+      })),
       requiredDates: climate.map((day) => day.date),
       itinerary: itinerary.map((day) => ({
         date: formatDate(day.date),
