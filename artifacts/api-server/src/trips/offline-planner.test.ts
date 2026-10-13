@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { offlineFallbackCode } from "../routes/trips";
 import { DEMO_SCENARIOS } from "./data";
-import { GeminiNotConfiguredError, GeminiRequestError } from "./gemini";
+import { GroqNotConfiguredError, GroqRequestError } from "./groq";
 import { createOfflineTripPlan } from "./offline-planner";
 
 describe("offline planning fallback", () => {
   it("creates a validated local itinerary without claiming AI review or live data", () => {
     const request = DEMO_SCENARIOS[0]!.request;
-    const result = createOfflineTripPlan(request, "offline-test-run", "GEMINI_QUOTA_EXHAUSTED");
+    const result = createOfflineTripPlan(request, "offline-test-run", "GROQ_QUOTA_EXHAUSTED");
     const expectedDays =
       (Date.UTC(
         request.endDate.getUTCFullYear(),
@@ -28,7 +28,7 @@ describe("offline planning fallback", () => {
     expect(result.itinerary.every((day) => day.activities.length > 0)).toBe(true);
     expect(result.criticReports).toEqual([]);
     expect(result.agentsUsed).toEqual([]);
-    expect(result.fallbackNotice).toContain("GEMINI_QUOTA_EXHAUSTED");
+    expect(result.fallbackNotice).toContain("GROQ_QUOTA_EXHAUSTED");
     expect(result.weatherAssessment.every((day) => day.summary.includes("not a live forecast"))).toBe(true);
     expect(result.budgetAssessment.totalEstimatedInr).toBe(
       result.budgetAssessment.accommodationInr
@@ -41,11 +41,11 @@ describe("offline planning fallback", () => {
   });
 
   it("uses offline planning for quota and availability failures, not provider setup errors", () => {
-    expect(offlineFallbackCode(new GeminiNotConfiguredError())).toBe("GEMINI_NOT_CONFIGURED");
-    expect(offlineFallbackCode(new GeminiRequestError("quota", 503, "GEMINI_QUOTA_EXHAUSTED")))
-      .toBe("GEMINI_QUOTA_EXHAUSTED");
-    expect(offlineFallbackCode(new GeminiRequestError("limited", 503, "GEMINI_RATE_LIMITED")))
-      .toBe("GEMINI_RATE_LIMITED");
-    expect(offlineFallbackCode(new GeminiRequestError("bad key", 502, "GEMINI_AUTH_FAILED"))).toBeNull();
+    expect(offlineFallbackCode(new GroqNotConfiguredError())).toBe("GROQ_NOT_CONFIGURED");
+    expect(offlineFallbackCode(new GroqRequestError("quota", 503, "GROQ_QUOTA_EXHAUSTED")))
+      .toBe("GROQ_QUOTA_EXHAUSTED");
+    expect(offlineFallbackCode(new GroqRequestError("limited", 503, "GROQ_RATE_LIMITED")))
+      .toBe("GROQ_RATE_LIMITED");
+    expect(offlineFallbackCode(new GroqRequestError("bad key", 502, "GROQ_AUTH_FAILED"))).toBeNull();
   });
 });

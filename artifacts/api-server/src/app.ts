@@ -1,3 +1,13 @@
+if (typeof process.loadEnvFile === "function") {
+  try {
+    process.loadEnvFile();
+  } catch {
+    try {
+      process.loadEnvFile("../../.env");
+    } catch {}
+  }
+}
+
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -30,5 +40,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+app.use(router);
 
 export default app;

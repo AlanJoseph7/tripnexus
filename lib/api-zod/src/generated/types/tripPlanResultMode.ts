@@ -10,6 +10,6 @@ export type TripPlanResultMode = typeof TripPlanResultMode[keyof typeof TripPlan
 
 
 export const TripPlanResultMode = {
-  gemini_api: 'gemini_api',
+  groq_api: 'groq_api',
   offline_fallback: 'offline_fallback',
 } as const;

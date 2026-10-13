@@ -12,7 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
 import { getRunTrace, storeRunTrace } from "../lib/trace-store";
-import { GeminiNotConfiguredError, GeminiRequestError } from "../trips/gemini";
+import { GroqNotConfiguredError, GroqRequestError } from "../trips/groq";
 import { AGENTS, DEMO_SCENARIOS, DESTINATIONS } from "../trips/data";
 import { adaptiveTripPlanner, PlannerInputError, PlannerOutputError } from "../trips/orchestrator";
 import { createOfflineTripPlan } from "../trips/offline-planner";
@@ -64,15 +64,15 @@ function categorizePlanningError(error: unknown): PlanningRunFailure {
       setupInstruction: null,
     };
   }
-  if (error instanceof GeminiNotConfiguredError) {
+  if (error instanceof GroqNotConfiguredError) {
     return {
       statusCode: 503,
-      code: "GEMINI_NOT_CONFIGURED",
-      error: "Trip planning needs a Gemini API key configured on the server.",
-      setupInstruction: "Add GEMINI_API_KEY in Replit Secrets, then restart the API Server.",
+      code: "GROQ_NOT_CONFIGURED",
+      error: "Trip planning needs a Groq API key configured on the server.",
+      setupInstruction: "Add GROQ_API_KEY in your .env or environment variables, then restart the API Server.",
     };
   }
-  if (error instanceof GeminiRequestError) {
+  if (error instanceof GroqRequestError) {
     return {
       statusCode: error.statusCode,
       code: error.code,
@@ -97,17 +97,22 @@ function categorizePlanningError(error: unknown): PlanningRunFailure {
 }
 
 export function offlineFallbackCode(error: unknown) {
-  if (error instanceof GeminiNotConfiguredError) return "GEMINI_NOT_CONFIGURED";
-  if (!(error instanceof GeminiRequestError)) return null;
-  return [
-    "GEMINI_QUOTA_EXHAUSTED",
-    "GEMINI_RATE_LIMITED",
-    "GEMINI_TEMPORARILY_UNAVAILABLE",
-    "GEMINI_TIMEOUT",
-    "GEMINI_NETWORK_ERROR",
-  ].includes(error.code)
-    ? error.code
-    : null;
+  if (error instanceof GroqNotConfiguredError) return "GROQ_NOT_CONFIGURED";
+  if (error instanceof GroqRequestError) {
+    return [
+      "GROQ_QUOTA_EXHAUSTED",
+      "GROQ_RATE_LIMITED",
+      "GROQ_TEMPORARILY_UNAVAILABLE",
+      "GROQ_TIMEOUT",
+      "GROQ_NETWORK_ERROR",
+      "GROQ_REQUEST_REJECTED",
+      "GROQ_INVALID_RESPONSE",
+      "GROQ_PROVIDER_REJECTED",
+    ].includes(error.code)
+      ? error.code
+      : null;
+  }
+  return null;
 }
 
 async function executePlanningRun(runId: string, request: unknown) {
@@ -139,11 +144,11 @@ async function executePlanningRun(runId: string, request: unknown) {
     const failure = categorizePlanningError(error);
     if (failure.statusCode >= 500) {
       logger.error(
-        { runId, code: failure.code, errorType: error instanceof Error ? error.name : "unknown" },
+        { runId, code: failure.code, errorType: error instanceof Error ? error.name : "unknown", errorMessage: error instanceof Error ? error.message : "unknown" },
         "Trip planning run failed",
       );
     } else {
-      logger.warn({ runId, code: failure.code }, "Trip planning run was rejected");
+      logger.warn({ runId, code: failure.code, errorMessage: error instanceof Error ? error.message : "unknown" }, "Trip planning run was rejected");
     }
     failPlanningRun(runId, failure);
   }
@@ -187,6 +192,11 @@ router.post("/plan-trip", async (req, res): Promise<void> => {
     }
     req.log.error({ errorType: error instanceof Error ? error.name : "unknown" }, "Could not queue trip planning run");
     sendError(res, 500, "INTERNAL_ERROR", "Trip planning could not be queued. Retry the request.");
+    return;
+  }
+  if (process.env.VERCEL) {
+    await executePlanningRun(runId, parsed.data);
+    res.status(202).json(PlanTripResponse.parse({ runId, status: "completed" }));
     return;
   }
   res.status(202).json(PlanTripResponse.parse({ runId, status: "queued" }));

@@ -10,6 +10,6 @@ export type TraceExportMode = typeof TraceExportMode[keyof typeof TraceExportMod
 
 
 export const TraceExportMode = {
-  gemini_api: 'gemini_api',
+  groq_api: 'groq_api',
   offline_fallback: 'offline_fallback',
 } as const;

@@ -1,15 +1,16 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
-import { DEFAULT_GEMINI_MODEL } from "../trips/gemini";
+import { getActiveModelInfo } from "../trips/model-provider";
 
 const router: IRouter = Router();
 
-router.get("/healthz", (_req, res) => {
+router.get(["/healthz", "/health"], (_req, res) => {
+  const info = getActiveModelInfo();
   const data = HealthCheckResponse.parse({
     status: "ok",
-    mode: "gemini_api",
-    model: process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL,
-    geminiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    mode: "groq_api",
+    model: info.model,
+    groqConfigured: info.configured,
   });
   res.json(data);
 });

@@ -159,7 +159,7 @@ describe("adaptive multi-agent planner", () => {
     }, "queued-run-id");
 
     expect(result.runId).toBe("queued-run-id");
-    expect(result.mode).toBe("gemini_api");
+    expect(result.mode).toBe("groq_api");
     expect(result.status).toBe("approved");
     expect(result.revisionCount).toBe(1);
     expect(result.itinerary).toHaveLength(2);
@@ -190,7 +190,7 @@ describe("adaptive multi-agent planner", () => {
     ).rejects.toThrow(/supported destinations/i);
   });
 
-  it("fills a missing Gemini weather note from the bundled climate data", async () => {
+  it("fills a missing model weather note from the bundled climate data", async () => {
     const planner = new AdaptiveTripPlanner(new FixtureModel(undefined, true));
     const result = await planner.plan({
       destinationId: "jaipur",
@@ -211,4 +211,28 @@ describe("adaptive multi-agent planner", () => {
     expect(result.weatherAssessment[1]?.recommendation).toContain("Check a current forecast");
     expect(result.weatherAssessment[1]?.recommendation).toContain("Bundled typical-climate estimate");
   });
+
+  it("initializes all five distinct specialist agents conforming to BaseAgent", () => {
+    const planner = new AdaptiveTripPlanner(new FixtureModel());
+    expect(planner.tripManager.id).toBe("trip_manager");
+    expect(planner.destinationAgent.id).toBe("destination_agent");
+    expect(planner.budgetAgent.id).toBe("budget_agent");
+    expect(planner.weatherAgent.id).toBe("weather_agent");
+    expect(planner.criticAgent.id).toBe("critic_agent");
+
+    expect(planner.destinationAgent.allowedTools).toContain("places_search");
+    expect(planner.budgetAgent.allowedTools).toContain("budget_estimate");
+    expect(planner.weatherAgent.allowedTools).toContain("seasonal_weather_estimate");
+
+    // Tool security enforcement: destination agent cannot run budget_estimate
+    expect(() => planner.destinationAgent.executeTool("budget_estimate", {})).toThrow(/Security Violation/);
+
+    // Authorized tool execution succeeds
+    const places = planner.destinationAgent.executeTool("places_search", {
+      destinationId: "jaipur",
+      limit: 2,
+    }) as unknown[];
+    expect(places.length).toBeGreaterThanOrEqual(1);
+  });
 });
+

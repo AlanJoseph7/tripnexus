@@ -83,6 +83,28 @@ describe("Groq request recovery", () => {
     expect(events.at(-1)).toEqual({ attempt: 3, status: "completed" });
   });
 
+  it("recovers from transient json_validate_failed (HTTP 400) errors with retry", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(400, {
+        error: { code: "json_validate_failed", message: "Failed to validate JSON." },
+      }))
+      .mockResolvedValueOnce(response(200, { choices: [{ message: { content: '{"ready":true}' } }] }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const pending = new GroqJsonModel().generateJson(
+      "json-validate-retry-test",
+      "trip_manager",
+      "Return JSON.",
+      "{}",
+      z.object({ ready: z.boolean() }),
+      { type: "object" },
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toEqual({ ready: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("waits for Groq's transient rate-limit reset and retries only once", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response(429, {
@@ -130,7 +152,7 @@ describe("Groq request recovery", () => {
 
   it("does not retry a rate limit if the provider reset window is too long", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      response(429, { error: { message: "Rate limit reached" } }, { "Retry-After": "30" }),
+      response(429, { error: { message: "Rate limit reached" } }, { "Retry-After": "60" }),
     );
     globalThis.fetch = fetchMock as typeof fetch;
 
@@ -143,7 +165,7 @@ describe("Groq request recovery", () => {
       { type: "object" },
     )).rejects.toMatchObject({
       code: "GROQ_RATE_LIMITED",
-      message: expect.stringContaining("30 seconds"),
+      message: expect.stringContaining("60 seconds"),
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

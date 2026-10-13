@@ -14,7 +14,7 @@ export type TripRequest = z.infer<typeof PlanTripBody>;
 export type TripPlanResult = NonNullable<z.infer<typeof GetPlanningRunResponse>["result"]>;
 export type TraceEvent = TripPlanResult["executionTrace"][number];
 export type AgentMessage = TripPlanResult["messages"][number];
-export type PlannerMode = "gemini_api" | "offline_fallback";
+export type PlannerMode = "groq_api" | "offline_fallback";
 
 export interface ModelCallEvent {
   attempt: number;

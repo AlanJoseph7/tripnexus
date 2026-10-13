@@ -4,19 +4,21 @@ import type { AgentId, JsonModel, ModelCallEvent } from "./types";
 
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
 const STRICT_JSON_SCHEMA_MODELS = new Set([
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
   "openai/gpt-oss-20b",
   "openai/gpt-oss-120b",
 ]);
 const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 45_000;
-const MAX_RATE_LIMIT_RETRY_WAIT_MS = 20_000;
+const MAX_RATE_LIMIT_RETRY_WAIT_MS = 45_000;
 const MAX_PROVIDER_COOLDOWN_MS = 60_000;
 const DEFAULT_RATE_LIMIT_RETRY_WAIT_MS = 1_200;
 const MAX_COMPLETION_TOKENS = 4_096;
 
 export class GroqNotConfiguredError extends Error {
   constructor() {
-    super("Groq is not configured. Add GROQ_API_KEY to Replit Secrets.");
+    super("Groq is not configured. Add GROQ_API_KEY in your .env or environment variables.");
     this.name = "GroqNotConfiguredError";
   }
 }
@@ -37,8 +39,11 @@ class ProviderHttpError extends Error {
     readonly status: number,
     readonly retryAfterMs?: number,
     readonly quotaExhausted = false,
+    readonly isJsonValidateFailed = false,
+    readonly providerCode?: string,
+    readonly providerMessage?: string,
   ) {
-    super(`Groq returned HTTP ${status}.`);
+    super(`Groq returned HTTP ${status}${providerCode ? ` (${providerCode})` : ""}.`);
     this.name = "ProviderHttpError";
   }
 }
@@ -128,6 +133,9 @@ function providerErrorInfo(body: string) {
     const message = "message" in error && typeof error.message === "string" ? error.message : "";
     const isProviderRateLimitCode = /rate[_ -]?limit[_ -]?exceeded|too[_ -]?many[_ -]?requests/i.test(code);
     return {
+      code,
+      message,
+      isJsonValidateFailed: code === "json_validate_failed",
       quotaExhausted:
         !isProviderRateLimitCode &&
         /insufficient[_ -]quota|billing|credits? (?:balance )?(?:exhausted|depleted)|quota exhausted/i.test(
@@ -141,14 +149,14 @@ function providerErrorInfo(body: string) {
 }
 
 function responseRetryAfterMs(headers: Headers, bodyRetryAfterMs?: number) {
+  if (bodyRetryAfterMs !== undefined && bodyRetryAfterMs > 0) return bodyRetryAfterMs;
   const explicit = parseDurationMs(headers.get("retry-after"));
-  if (explicit !== undefined) return explicit;
-  const resetValues = [
-    parseDurationMs(headers.get("x-ratelimit-reset-requests")),
-    parseDurationMs(headers.get("x-ratelimit-reset-tokens")),
-  ].filter((value): value is number => value !== undefined);
-  if (resetValues.length > 0) return Math.max(...resetValues);
-  return bodyRetryAfterMs;
+  if (explicit !== undefined && explicit > 0) return explicit;
+  const tokenReset = parseDurationMs(headers.get("x-ratelimit-reset-tokens"));
+  if (tokenReset !== undefined && tokenReset > 0) return tokenReset;
+  const requestReset = parseDurationMs(headers.get("x-ratelimit-reset-requests"));
+  if (requestReset !== undefined && requestReset > 0) return requestReset;
+  return undefined;
 }
 
 function providerStatus(error: unknown) {
@@ -167,20 +175,26 @@ function providerQuotaExhausted(error: unknown) {
 
 function isRetryableFailure(error: unknown) {
   if (providerQuotaExhausted(error)) return false;
+  if (error instanceof ProviderHttpError && error.isJsonValidateFailed) return true;
   const status = providerStatus(error);
   return status === undefined || status === 408 || status === 429 || status >= 500;
 }
 
 function retryLimit(error: unknown) {
+  if (error instanceof ProviderHttpError && error.isJsonValidateFailed) return 3;
   const status = providerStatus(error);
-  if (status === 429) return 2;
+  if (status === 429) return 4;
   return status === 408 || (status !== undefined && status >= 500) ? 3 : 2;
 }
 
 function retryDelayMs(attempt: number, error: unknown) {
+  if (error instanceof ProviderHttpError && error.isJsonValidateFailed) {
+    return 600 * (attempt + 1);
+  }
   const status = providerStatus(error);
   if (status === 429) {
-    return providerRetryAfterMs(error) ?? DEFAULT_RATE_LIMIT_RETRY_WAIT_MS;
+    const delay = providerRetryAfterMs(error) ?? DEFAULT_RATE_LIMIT_RETRY_WAIT_MS;
+    return delay + 500;
   }
   if (status === 408 || (status !== undefined && status >= 500)) {
     return Math.min(750 * 2 ** attempt, 3_000);
@@ -212,6 +226,8 @@ function failureDetails(error: unknown) {
     failureKind: status === undefined ? "network_or_provider_error" : "provider_error",
     errorType: error instanceof Error ? error.name : "unknown",
     ...(status === undefined ? {} : { providerStatus: status }),
+    ...(error instanceof ProviderHttpError && error.providerCode ? { providerCode: error.providerCode } : {}),
+    ...(error instanceof ProviderHttpError && error.providerMessage ? { providerMessage: error.providerMessage } : {}),
     ...(providerRetryAfterMs(error) === undefined
       ? {}
       : { retryAfterMs: providerRetryAfterMs(error) }),
@@ -224,7 +240,9 @@ function isTimeout(error: unknown) {
 }
 
 export class GroqJsonModel implements JsonModel {
-  private readonly model = process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
+  get model(): string {
+    return process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
+  }
   private providerCooldownUntil = 0;
 
   async generateJson<T>(
@@ -241,7 +259,7 @@ export class GroqJsonModel implements JsonModel {
 
     nextCall(runId, agentId);
     let lastFailure: unknown;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
         const parsed = await requestGate.run(async () => {
           const remainingCooldownMs = this.providerCooldownUntil - Date.now();
@@ -282,7 +300,14 @@ export class GroqJsonModel implements JsonModel {
                 Date.now() + Math.min(retryAfterMs, MAX_PROVIDER_COOLDOWN_MS),
               );
             }
-            throw new ProviderHttpError(response.status, retryAfterMs, errorInfo.quotaExhausted);
+            throw new ProviderHttpError(
+              response.status,
+              retryAfterMs,
+              errorInfo.quotaExhausted,
+              errorInfo.isJsonValidateFailed,
+              errorInfo.code,
+              errorInfo.message,
+            );
           }
 
           const payload: unknown = await response.json();
@@ -337,7 +362,7 @@ export class GroqJsonModel implements JsonModel {
     const status = providerStatus(lastFailure);
     if (status === 401 || status === 403) {
       throw new GroqRequestError(
-        "Groq rejected the API key or its access. Replace GROQ_API_KEY with a valid key in Replit Secrets.",
+        "Groq rejected the API key or its access. Replace GROQ_API_KEY with a valid key in your .env or environment variables.",
         502,
         "GROQ_AUTH_FAILED",
       );
@@ -383,8 +408,12 @@ export class GroqJsonModel implements JsonModel {
       );
     }
     if (status === 400) {
+      const detail =
+        lastFailure instanceof ProviderHttpError && lastFailure.providerMessage
+          ? `: ${lastFailure.providerMessage}`
+          : ". Check that GROQ_MODEL supports JSON-schema outputs.";
       throw new GroqRequestError(
-        "Groq rejected the structured-output request. Check that GROQ_MODEL supports JSON-schema outputs.",
+        `Groq rejected the structured-output request${detail}`,
         502,
         "GROQ_REQUEST_REJECTED",
       );

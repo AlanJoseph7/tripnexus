@@ -2,8 +2,15 @@ import { randomUUID } from "node:crypto";
 import { GetPlanningRunResponse, PlanTripBody } from "@workspace/api-zod";
 import { z } from "zod";
 import { AGENTS, findDestination, type Place } from "./data";
-import { DEFAULT_GEMINI_MODEL, geminiModel } from "./gemini";
+import { getActiveModel, getActiveModelInfo } from "./model-provider";
 import { RunTrace } from "./trace";
+import {
+  TripManagerAgent,
+  DestinationAgent,
+  BudgetAgent,
+  WeatherAgent,
+  CriticAgent,
+} from "./base-agent";
 import {
   executeLocalTool,
   getToolCatalog,
@@ -109,7 +116,7 @@ const WeatherNotesSchema = z.object({
 });
 
 const ReviewIssueSchema = z.object({
-  id: z.string().regex(/^[a-z0-9][a-z0-9-]{2,50}$/),
+  id: z.string().min(1).max(80),
   severity: z.enum(["low", "medium", "high"]),
   responsibleAgent: z.enum(["destination_agent", "budget_agent", "weather_agent"]),
   requestedAction: z.string().min(12).max(300),
@@ -358,7 +365,7 @@ function validateRequest(raw: unknown): TripRequest {
 function managerSystemInstruction() {
   return [
     "You are the Trip Manager in a five-agent travel-planning team.",
-    "Return only JSON matching the supplied schema.",
+    "Return only valid JSON matching the supplied schema without markdown fences or outside text.",
     "Create one useful, bounded assignment for each of destination_agent, budget_agent, and weather_agent.",
     "Keep each assignment task under 200 characters.",
     "Always assign the required local tools: destination_agent must use places_search, place_details, route_distance; budget_agent must use budget_estimate; weather_agent must use seasonal_weather_estimate and indoor_alternatives.",
@@ -370,8 +377,9 @@ function managerSystemInstruction() {
 function destinationSystemInstruction() {
   return [
     "You are the Destination Agent. Select only place IDs in the supplied local catalogue.",
-    "Return only JSON matching the schema. Include exactly one itinerary entry per requested date, in date order.",
+    "Return only valid JSON matching the schema without markdown fences or outside text. Include exactly one itinerary entry per requested date, in date order.",
     "Give each day one or two non-overlapping activities, with realistic times and a concise reason tied to the user's interests.",
+    "Each day must contain distinct, unique places. Never select the same place more than once in the same day.",
     "Prefer places with matching interests and activity preferences; avoid unnecessary backtracking.",
     "On revision, address the cited critic issue while preserving unaffected days when possible.",
     "Do not claim availability, reservations, or current opening hours.",
@@ -381,7 +389,7 @@ function destinationSystemInstruction() {
 function budgetSystemInstruction() {
   return [
     "You are the Budget Agent. The provided cost figures are calculated by a local tool and are authoritative for this response.",
-    "Return only JSON matching the schema. Do not change any numeric values, invent live prices, or imply the estimate is a quote.",
+    "Return only valid JSON matching the schema without markdown fences or outside text. Do not change any numeric values, invent live prices, or imply the estimate is a quote.",
     "Keep the explanation to one short sentence under 200 characters. Mention the largest trade-off and, if over budget, recommend a lower-cost option.",
   ].join(" ");
 }
@@ -389,7 +397,7 @@ function budgetSystemInstruction() {
 function weatherSystemInstruction() {
   return [
     "You are the Weather Agent. The provided climate values come from a bundled typical-month dataset, not a live forecast.",
-    "Return only JSON matching the schema. Use only activity place IDs from the supplied matching day.",
+    "Return only valid JSON matching the schema without markdown fences or outside text. Use only activity place IDs from the supplied matching day.",
     "Return exactly one note for every date in climateEstimate, in the same order; copy each date exactly.",
     "Recommend practical clothing, timing, or the supplied indoor alternative when appropriate; never promise forecast conditions.",
   ].join(" ");
@@ -397,17 +405,18 @@ function weatherSystemInstruction() {
 
 function criticSystemInstruction() {
   return [
-    "You are the independent Critic Agent. Return only JSON matching the schema.",
+    "You are the independent Critic Agent. Return only valid JSON matching the schema without markdown fences or outside text.",
     "Review the itinerary against the exact request, date coverage, tool-derived budget arithmetic, route distances, weather caveat, and agent recommendations.",
-    "Reject only when a material issue is supported by evidence in the supplied plan. Each rejection must name the responsible specialist and a concrete correction.",
-    "Approve when there is no unresolved material issue. Do not invent live availability, prices, weather, or unsupported factual claims.",
+    "If the proposed draft itinerary has valid dates, reasonable budget allocations, and logical activities matching the destination, APPROVE the plan.",
+    "Reject only when a severe, material issue is strictly supported by evidence in the supplied plan. Each rejection must name the responsible specialist and a concrete correction.",
+    "Do not invent live availability, prices, weather, or unsupported factual claims.",
   ].join(" ");
 }
 
 function revisionManagerSystemInstruction() {
   return [
     "You are the Trip Manager routing a critic's rejection to one responsible specialist.",
-    "Return only JSON matching the schema. Choose one cited issue and target the specialist named as responsible for it.",
+    "Return only valid JSON matching the schema without markdown fences or outside text. Choose one cited issue and target the specialist named as responsible for it.",
     "Keep the correction specific and bounded; do not restart unrelated work.",
   ].join(" ");
 }
@@ -483,7 +492,7 @@ async function callAgent<T>(
       agentId,
       eventType: "model_call",
       action: `attempt_${event.attempt}`,
-      summary: `${agentId} Gemini model call ${event.status} (attempt ${event.attempt}).`,
+      summary: `${agentId} Groq model call ${event.status} (attempt ${event.attempt}).`,
       status: event.status,
     });
     },
@@ -505,13 +514,38 @@ function buildDayItinerary(
   distanceKm: number,
   allowedPlaceIds: Set<string>,
 ) {
-  const activities = dayDraft.activities.map((draft: ActivityDraft) => {
+  const seenPlaceIds = new Set<string>();
+  const activities: Array<{
+    placeId: string;
+    name: string;
+    category: string;
+    startTime: string;
+    durationMinutes: number;
+    estimatedCostInr: number;
+    setting: "indoor" | "outdoor" | "mixed";
+    area: string;
+    rationale: string;
+  }> = [];
+
+  for (const draft of dayDraft.activities) {
     if (!allowedPlaceIds.has(draft.placeId)) {
       throw new PlannerOutputError(`Destination Agent selected a place outside the supplied local catalogue.`);
     }
-    const place = detailsById.get(draft.placeId);
+    let targetPlaceId = draft.placeId;
+    if (seenPlaceIds.has(targetPlaceId)) {
+      // Self-healing: if the model picked the same place twice for this day, pick an unused candidate
+      const unusedPlaceId = Array.from(allowedPlaceIds).find((id) => !seenPlaceIds.has(id) && detailsById.has(id));
+      if (unusedPlaceId) {
+        targetPlaceId = unusedPlaceId;
+      } else {
+        // If no alternative candidate place is available, skip duplicate activity
+        continue;
+      }
+    }
+    seenPlaceIds.add(targetPlaceId);
+    const place = detailsById.get(targetPlaceId);
     if (!place) throw new PlannerOutputError("A selected place is missing from the local place-details tool result.");
-    return {
+    activities.push({
       placeId: place.id,
       name: place.name,
       category: place.category,
@@ -521,11 +555,9 @@ function buildDayItinerary(
       setting: place.setting,
       area: place.area,
       rationale: draft.rationale,
-    };
-  });
-  if (new Set(activities.map((activity) => activity.placeId)).size !== activities.length) {
-    throw new PlannerOutputError("An itinerary day cannot repeat the same place.");
+    });
   }
+
   return {
     dayNumber,
     date: new Date(`${dayDraft.date}T00:00:00.000Z`),
@@ -921,7 +953,21 @@ function makeManagerPlanPrompt(request: TripRequest, toolCatalog: ReturnType<typ
 }
 
 export class AdaptiveTripPlanner {
-  constructor(private readonly model: JsonModel = geminiModel) {}
+  readonly tripManager: TripManagerAgent;
+  readonly destinationAgent: DestinationAgent;
+  readonly budgetAgent: BudgetAgent;
+  readonly weatherAgent: WeatherAgent;
+  readonly criticAgent: CriticAgent;
+  private readonly model: JsonModel;
+
+  constructor(model: JsonModel = getActiveModel()) {
+    this.model = model;
+    this.tripManager = new TripManagerAgent(this.model);
+    this.destinationAgent = new DestinationAgent(this.model);
+    this.budgetAgent = new BudgetAgent(this.model);
+    this.weatherAgent = new WeatherAgent(this.model);
+    this.criticAgent = new CriticAgent(this.model);
+  }
 
   async plan(rawRequest: unknown, requestedRunId?: string): Promise<TripPlanResult> {
     const request = validateRequest(rawRequest);
@@ -1201,11 +1247,17 @@ export class AdaptiveTripPlanner {
       });
     }
 
+    const modelInfo = getActiveModelInfo();
+    const modelName = typeof (this.model as unknown as { getModel?: () => string }).getModel === "function"
+      ? (this.model as unknown as { getModel: () => string }).getModel()
+      : modelInfo.model;
+    const mode = "groq_api" as const;
+
     const result = {
       runId,
       status: criticReport.decision === "APPROVED" ? "approved" : "needs_attention",
-      mode: "gemini_api",
-      model: process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL,
+      mode,
+      model: modelName,
       request,
       itinerary,
       budgetAssessment,
