@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { copyFile, rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -121,6 +121,24 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  const rootApiDir = path.resolve(artifactDir, "../../api");
+  const filesToCopy = [
+    "app.mjs",
+    "pino-worker.mjs",
+    "pino-file.mjs",
+    "pino-pretty.mjs",
+    "thread-stream-worker.mjs",
+  ];
+  for (const file of filesToCopy) {
+    const src = path.resolve(distDir, file);
+    const dest = path.resolve(rootApiDir, file);
+    try {
+      await copyFile(src, dest);
+    } catch {
+      // Optional companion file may not be emitted
+    }
+  }
 }
 
 buildAll().catch((err) => {

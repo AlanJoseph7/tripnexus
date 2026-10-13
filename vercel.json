@@ -2,6 +2,11 @@
   "version": 2,
   "buildCommand": "pnpm run build",
   "outputDirectory": "artifacts/tripnexus/dist/public",
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "api/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
