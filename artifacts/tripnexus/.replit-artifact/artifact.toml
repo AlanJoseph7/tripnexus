@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "TripNexus"
+description = "TripNexus helps travelers create date-aware itineraries with coordinated destination, budget, and weather specialists, plus a clear execution trace for every planning run."
+version = "1.0.0"
+id = "artifacts/tripnexus"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22473
+
+[services.development]
+run = "pnpm --filter @workspace/tripnexus run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tripnexus", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/tripnexus/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22473"
+BASE_PATH = "/"

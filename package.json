@@ -1,0 +1,23 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @workspace/api-server --filter @workspace/tripnexus run dev",
+    "dev:api": "pnpm --filter @workspace/api-server run dev",
+    "dev:ui": "pnpm --filter @workspace/tripnexus run dev",
+    "build:libs": "tsc --build",
+    "build": "pnpm run build:libs && pnpm -r --filter \"./artifacts/**\" --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "test": "pnpm --filter @workspace/api-server test"
+  },
+  "private": true,
+  "dependencies": {
+    "@replit/connectors-sdk": "^0.4.3"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3"
+  }
+}

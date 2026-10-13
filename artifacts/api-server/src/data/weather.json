@@ -1,0 +1,13 @@
+[
+  {"destinationId":"goa","wetMonths":[6,7,8,9],"hotMonths":[3,4,5],"coolMonths":[12,1,2],"typicalMinC":22,"typicalMaxC":33,"wetRainChance":65,"dryRainChance":12},
+  {"destinationId":"jaipur","wetMonths":[7,8],"hotMonths":[4,5,6],"coolMonths":[12,1,2],"typicalMinC":9,"typicalMaxC":40,"wetRainChance":35,"dryRainChance":8},
+  {"destinationId":"kochi","wetMonths":[5,6,7,8,9],"hotMonths":[3,4,5],"coolMonths":[12,1,2],"typicalMinC":23,"typicalMaxC":33,"wetRainChance":68,"dryRainChance":18},
+  {"destinationId":"manali","wetMonths":[7,8],"hotMonths":[5,6],"coolMonths":[12,1,2],"typicalMinC":-2,"typicalMaxC":25,"wetRainChance":48,"dryRainChance":16},
+  {"destinationId":"mumbai","wetMonths":[6,7,8,9],"hotMonths":[3,4,5],"coolMonths":[12,1,2],"typicalMinC":20,"typicalMaxC":34,"wetRainChance":62,"dryRainChance":12},
+  {"destinationId":"udaipur","wetMonths":[7,8],"hotMonths":[4,5,6],"coolMonths":[12,1,2],"typicalMinC":10,"typicalMaxC":39,"wetRainChance":36,"dryRainChance":8},
+  {"destinationId":"varanasi","wetMonths":[7,8,9],"hotMonths":[4,5,6],"coolMonths":[12,1,2],"typicalMinC":9,"typicalMaxC":40,"wetRainChance":44,"dryRainChance":9},
+  {"destinationId":"bengaluru","wetMonths":[6,7,8,9,10],"hotMonths":[3,4,5],"coolMonths":[12,1,2],"typicalMinC":16,"typicalMaxC":34,"wetRainChance":38,"dryRainChance":14},
+  {"destinationId":"delhi","wetMonths":[7,8],"hotMonths":[4,5,6],"coolMonths":[12,1,2],"typicalMinC":8,"typicalMaxC":42,"wetRainChance":40,"dryRainChance":8},
+  {"destinationId":"bangkok","wetMonths":[5,6,7,8,9,10],"hotMonths":[3,4,5],"coolMonths":[12,1],"typicalMinC":24,"typicalMaxC":35,"wetRainChance":58,"dryRainChance":15},
+  {"destinationId":"singapore","wetMonths":[11,12,1],"hotMonths":[4,5,6],"coolMonths":[1,2],"typicalMinC":24,"typicalMaxC":32,"wetRainChance":50,"dryRainChance":25}
+]

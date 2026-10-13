@@ -1,0 +1,556 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: TripNexus multi-agent travel planning API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: trip-planning
+    description: Travel datasets, agent roster, multi-agent plans, and execution traces
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /agents:
+    get:
+      operationId: getAgents
+      tags: [trip-planning]
+      summary: List the five planning agents
+      responses:
+        "200":
+          description: Registered specialist agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentInfo"
+  /destinations:
+    get:
+      operationId: getDestinations
+      tags: [trip-planning]
+      summary: List supported destinations
+      responses:
+        "200":
+          description: Curated destination dataset
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Destination"
+  /demo:
+    get:
+      operationId: getDemoScenarios
+      tags: [trip-planning]
+      summary: List sample trip requests for demonstrations
+      responses:
+        "200":
+          description: Five illustrative planning scenarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DemoScenario"
+  /plan-trip:
+    post:
+      operationId: planTrip
+      tags: [trip-planning]
+      summary: Run adaptive multi-agent trip planning
+      description: Run adaptive travel planning using Groq and bundled local reference data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TripRequest"
+      responses:
+        "202":
+          description: Planning accepted; poll the run resource for completion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanTripAccepted"
+        "400":
+          description: Invalid trip request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The in-memory planning queue is at capacity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: The run could not be queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /runs/{runId}:
+    get:
+      operationId: getPlanningRun
+      tags: [trip-planning]
+      summary: Retrieve the status and result of a planning run
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Current status, completed result, or categorized failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanningRunStatus"
+        "404":
+          description: Run is unknown, expired, or was cleared by an API restart
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /runs/{runId}/trace:
+    get:
+      operationId: getRunTrace
+      tags: [trip-planning]
+      summary: Retrieve the captured trace for a completed run
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Captured runtime events and agent messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraceExport"
+        "404":
+          description: Run trace is not present in this server process
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /documentation.pdf:
+    get:
+      operationId: getDocumentationPdf
+      tags: [trip-planning]
+      summary: Download the project documentation PDF
+      responses:
+        "200":
+          description: TripNexus project documentation
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        mode:
+          type: string
+          enum: [groq_api]
+        model:
+          type: string
+        groqConfigured:
+          type: boolean
+      required:
+        - status
+        - mode
+        - model
+        - groqConfigured
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        error:
+          type: string
+        setupInstruction:
+          type: ["string", "null"]
+      required: [code, error, setupInstruction]
+    AgentInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        responsibility:
+          type: string
+      required: [id, name, role, responsibility]
+    Destination:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        country:
+          type: string
+        region:
+          type: string
+        description:
+          type: string
+        estimatedDailyCostInr:
+          type: integer
+        currencyCode:
+          type: string
+        highlights:
+          type: array
+          items:
+            type: string
+      required: [id, name, country, region, description, estimatedDailyCostInr, currencyCode, highlights]
+    TripRequest:
+      type: object
+      properties:
+        destinationId:
+          type: string
+          minLength: 2
+        origin:
+          type: string
+          maxLength: 120
+        startDate:
+          type: string
+          format: date
+          description: First inclusive trip day. The full inclusive trip length cannot exceed 14 days.
+        endDate:
+          type: string
+          format: date
+          description: Last inclusive trip day; must be on or after startDate.
+        travelers:
+          type: integer
+          minimum: 1
+          maximum: 12
+        budgetInr:
+          type: integer
+          minimum: 1000
+          maximum: 10000000
+        interests:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+        activityPreferences:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+        pace:
+          type: string
+          enum: [relaxed, balanced, packed]
+        notes:
+          type: string
+          maxLength: 500
+      required: [destinationId, startDate, endDate, travelers, budgetInr, interests, activityPreferences, pace]
+    DemoScenario:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        request:
+          $ref: "#/components/schemas/TripRequest"
+      required: [id, title, description, request]
+    ItineraryActivity:
+      type: object
+      properties:
+        placeId:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        startTime:
+          type: string
+        durationMinutes:
+          type: integer
+        estimatedCostInr:
+          type: integer
+        setting:
+          type: string
+          enum: [indoor, outdoor, mixed]
+        area:
+          type: string
+        rationale:
+          type: string
+      required: [placeId, name, category, startTime, durationMinutes, estimatedCostInr, setting, area, rationale]
+    ItineraryDay:
+      type: object
+      properties:
+        dayNumber:
+          type: integer
+        date:
+          type: string
+          format: date
+        theme:
+          type: string
+        activities:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItineraryActivity"
+        routeDistanceKm:
+          type: number
+      required: [dayNumber, date, theme, activities, routeDistanceKm]
+    BudgetAssessment:
+      type: object
+      properties:
+        budgetInr:
+          type: integer
+        accommodationInr:
+          type: integer
+        foodInr:
+          type: integer
+        activitiesInr:
+          type: integer
+        transportInr:
+          type: integer
+        contingencyInr:
+          type: integer
+        totalEstimatedInr:
+          type: integer
+        remainingInr:
+          type: integer
+        withinBudget:
+          type: boolean
+        explanation:
+          type: string
+      required: [budgetInr, accommodationInr, foodInr, activitiesInr, transportInr, contingencyInr, totalEstimatedInr, remainingInr, withinBudget, explanation]
+    WeatherDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        summary:
+          type: string
+        minTempC:
+          type: integer
+        maxTempC:
+          type: integer
+        rainChancePercent:
+          type: integer
+        affectedActivities:
+          type: array
+          items:
+            type: string
+        recommendation:
+          type: string
+      required: [date, summary, minTempC, maxTempC, rainChancePercent, affectedActivities, recommendation]
+    CriticIssue:
+      type: object
+      properties:
+        id:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high]
+        responsibleAgent:
+          type: string
+        requestedAction:
+          type: string
+        evidence:
+          type: string
+      required: [id, severity, responsibleAgent, requestedAction, evidence]
+    CriticReport:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [APPROVED, REJECTED]
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/CriticIssue"
+        approvalSummary:
+          type: string
+      required: [decision, issues, approvalSummary]
+    AgentMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        runId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        sender:
+          type: string
+        recipient:
+          type: string
+        type:
+          type: string
+        task:
+          type: string
+        result:
+          type: ["string", "null"]
+        issueId:
+          type: ["string", "null"]
+        status:
+          type: string
+      required: [id, runId, timestamp, sender, recipient, type, task, result, issueId, status]
+    TraceEvent:
+      type: object
+      properties:
+        eventId:
+          type: string
+        runId:
+          type: string
+        sequence:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        agentId:
+          type: string
+        fromAgent:
+          type: ["string", "null"]
+        toAgent:
+          type: ["string", "null"]
+        eventType:
+          type: string
+        action:
+          type: ["string", "null"]
+        summary:
+          type: string
+        toolName:
+          type: ["string", "null"]
+        status:
+          type: string
+        revisionNumber:
+          type: integer
+      required: [eventId, runId, sequence, timestamp, agentId, fromAgent, toAgent, eventType, action, summary, toolName, status, revisionNumber]
+    TraceExport:
+      type: object
+      properties:
+        runId:
+          type: string
+        mode:
+          type: string
+          enum: [groq_api, offline_fallback]
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraceEvent"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentMessage"
+      required: [runId, mode, events, messages]
+    PlanTripAccepted:
+      type: object
+      properties:
+        runId:
+          type: string
+        status:
+          type: string
+          enum: [queued]
+      required: [runId, status]
+    PlanningRunFailure:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        code:
+          type: string
+        error:
+          type: string
+        setupInstruction:
+          type: ["string", "null"]
+      required: [statusCode, code, error, setupInstruction]
+    PlanningRunStatus:
+      type: object
+      properties:
+        runId:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        result:
+          oneOf:
+            - $ref: "#/components/schemas/TripPlanResult"
+            - type: "null"
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/PlanningRunFailure"
+            - type: "null"
+      required: [runId, status, result, error]
+    TripPlanResult:
+      type: object
+      properties:
+        runId:
+          type: string
+        status:
+          type: string
+          enum: [approved, needs_attention, partial_failure]
+        mode:
+          type: string
+          enum: [groq_api, offline_fallback]
+        fallbackNotice:
+          type: string
+        model:
+          type: string
+        request:
+          $ref: "#/components/schemas/TripRequest"
+        itinerary:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItineraryDay"
+        budgetAssessment:
+          $ref: "#/components/schemas/BudgetAssessment"
+        weatherAssessment:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeatherDay"
+        criticReports:
+          type: array
+          items:
+            $ref: "#/components/schemas/CriticReport"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentMessage"
+        executionTrace:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraceEvent"
+        agentsUsed:
+          type: array
+          items:
+            type: string
+        revisionCount:
+          type: integer
+      required: [runId, status, mode, model, request, itinerary, budgetAssessment, weatherAssessment, criticReports, messages, executionTrace, agentsUsed, revisionCount]
+
