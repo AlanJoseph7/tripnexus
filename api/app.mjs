@@ -35379,7 +35379,7 @@ router2.post("/plan-trip", async (req, res) => {
   }
   if (process.env.VERCEL) {
     await executePlanningRun(runId, parsed.data);
-    res.status(202).json(PlanTripResponse.parse({ runId, status: "completed" }));
+    res.status(202).json(PlanTripResponse.parse({ runId, status: "queued" }));
     return;
   }
   res.status(202).json(PlanTripResponse.parse({ runId, status: "queued" }));
@@ -35586,6 +35586,14 @@ app.use(import_express5.default.json());
 app.use(import_express5.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
 app.use(routes_default);
+app.use((err, _req, res, _next) => {
+  logger.error({ err }, "Unhandled server error");
+  if (res.headersSent) return;
+  res.status(500).json({
+    code: "INTERNAL_ERROR",
+    error: err instanceof Error ? err.message : "Internal server error"
+  });
+});
 var app_default = app;
 export {
   app_default as default

@@ -196,7 +196,7 @@ router.post("/plan-trip", async (req, res): Promise<void> => {
   }
   if (process.env.VERCEL) {
     await executePlanningRun(runId, parsed.data);
-    res.status(202).json(PlanTripResponse.parse({ runId, status: "completed" }));
+    res.status(202).json(PlanTripResponse.parse({ runId, status: "queued" }));
     return;
   }
   res.status(202).json(PlanTripResponse.parse({ runId, status: "queued" }));
