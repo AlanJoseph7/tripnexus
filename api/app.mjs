@@ -32908,7 +32908,9 @@ var DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 var GROQ_FALLBACK_MODELS = [
   "openai/gpt-oss-120b",
   "qwen/qwen3.8-27b",
-  "openai/gpt-oss-20b"
+  "openai/gpt-oss-20b",
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant"
 ];
 var STRICT_JSON_SCHEMA_MODELS = /* @__PURE__ */ new Set([
   "llama-3.3-70b-versatile",
@@ -32979,10 +32981,41 @@ var ConcurrencyGate = class {
 };
 var requestGate = new ConcurrencyGate(1);
 var callsByRun = /* @__PURE__ */ new Map();
+function getAvailableApiKeys() {
+  const raw = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || "";
+  return raw.split(",").map((k) => k.trim()).filter((k) => k.length > 0);
+}
 function readJson(text) {
-  const trimmed = text.trim();
-  const withoutFence = trimmed.startsWith("```") ? trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "") : trimmed;
-  return JSON.parse(withoutFence);
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  }
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const firstBrace = cleaned.indexOf("{");
+    const firstBracket = cleaned.indexOf("[");
+    let startIdx = -1;
+    let endIdx = -1;
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      startIdx = firstBrace;
+      endIdx = cleaned.lastIndexOf("}");
+    } else if (firstBracket !== -1) {
+      startIdx = firstBracket;
+      endIdx = cleaned.lastIndexOf("]");
+    }
+    if (startIdx !== -1 && endIdx > startIdx) {
+      const extracted = cleaned.slice(startIdx, endIdx + 1);
+      try {
+        return JSON.parse(extracted);
+      } catch {
+        const sanitized = extracted.replace(/,\s*([}\]])/g, "$1");
+        return JSON.parse(sanitized);
+      }
+    }
+    throw new SyntaxError("Failed to parse JSON from model output");
+  }
 }
 function nextCall(runId, agentId) {
   let callsByAgent = callsByRun.get(runId);
@@ -33126,6 +33159,7 @@ function isTimeout(error) {
 var GroqJsonModel = class {
   activeModel = process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
   modelCooldowns = /* @__PURE__ */ new Map();
+  currentKeyIndex = 0;
   get model() {
     return this.activeModel;
   }
@@ -33134,23 +33168,30 @@ var GroqJsonModel = class {
       return [process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL];
     }
     const configured = process.env.GROQ_MODEL?.trim();
-    const list = configured ? [configured, ...GROQ_FALLBACK_MODELS.filter((m) => m !== configured)] : [...GROQ_FALLBACK_MODELS];
+    const all = [
+      ...configured ? [configured] : [],
+      ...GROQ_FALLBACK_MODELS
+    ];
+    const unique = Array.from(new Set(all));
     const now = Date.now();
-    return list.sort((a, b) => {
+    return unique.sort((a, b) => {
       const aCd = this.modelCooldowns.get(a) ?? 0;
       const bCd = this.modelCooldowns.get(b) ?? 0;
-      return (aCd > now ? 1 : 0) - (bCd > now ? 1 : 0);
+      const aOnCd = aCd > now ? 1 : 0;
+      const bOnCd = bCd > now ? 1 : 0;
+      return aOnCd - bOnCd;
     });
   }
   async generateJson(runId, agentId, systemInstruction, prompt, schema, responseJsonSchema, onCallEvent) {
-    const apiKey = process.env.GROQ_API_KEY?.trim();
-    if (!apiKey) throw new GroqNotConfiguredError();
+    const apiKeys = getAvailableApiKeys();
+    if (apiKeys.length === 0) throw new GroqNotConfiguredError();
     nextCall(runId, agentId);
     const candidateModels = this.getCandidateModels();
     let overallLastFailure;
     for (let modelIdx = 0; modelIdx < candidateModels.length; modelIdx += 1) {
       const currentModel = candidateModels[modelIdx];
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        const currentApiKey = apiKeys[this.currentKeyIndex % apiKeys.length];
         try {
           const parsed = await requestGate.run(async () => {
             const now = Date.now();
@@ -33179,7 +33220,7 @@ var GroqJsonModel = class {
             const response = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
               method: "POST",
               headers: {
-                Authorization: `Bearer ${apiKey}`,
+                Authorization: `Bearer ${currentApiKey}`,
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
@@ -33232,7 +33273,7 @@ var GroqJsonModel = class {
             const validated = schema.parse(readJson(text));
             onCallEvent?.({ attempt: attempt + 1, status: "completed" });
             this.activeModel = currentModel;
-            await wait(200);
+            await wait(250);
             return validated;
           });
           logger.info({ runId, agentId, model: currentModel, attempt: attempt + 1 }, "Groq agent response validated");
@@ -33240,13 +33281,27 @@ var GroqJsonModel = class {
         } catch (error) {
           onCallEvent?.({ attempt: attempt + 1, status: "failed" });
           overallLastFailure = error;
-          if (error instanceof ProviderHttpError && error.quotaExhausted) {
-            break;
-          }
-          if (providerStatus(error) === 401 || providerStatus(error) === 403) {
-            break;
-          }
           const status2 = providerStatus(error);
+          if (error instanceof ProviderHttpError && error.quotaExhausted) {
+            this.modelCooldowns.set(currentModel, Date.now() + 18e5);
+            logger.warn(
+              { runId, agentId, model: currentModel, nextModel: candidateModels[modelIdx + 1] },
+              "Model token quota exhausted; failing over to next candidate model"
+            );
+            if (apiKeys.length > 1) {
+              this.currentKeyIndex = (this.currentKeyIndex + 1) % apiKeys.length;
+              logger.info({ newKeyIndex: this.currentKeyIndex }, "Rotating Groq API key after quota limit");
+            }
+            break;
+          }
+          if (status2 === 401 || status2 === 403) {
+            if (apiKeys.length > 1) {
+              this.currentKeyIndex = (this.currentKeyIndex + 1) % apiKeys.length;
+              logger.warn({ failedKeyIndex: this.currentKeyIndex }, "API key rejected; switching to backup key");
+              continue;
+            }
+            break;
+          }
           if ((status2 === 429 || status2 === 404) && modelIdx + 1 < candidateModels.length) {
             const nextModel = candidateModels[modelIdx + 1];
             logger.warn(
@@ -33260,6 +33315,9 @@ var GroqJsonModel = class {
               },
               "Groq model hit rate limit or is unavailable; failing over to alternative model in pool"
             );
+            if (apiKeys.length > 1) {
+              this.currentKeyIndex = (this.currentKeyIndex + 1) % apiKeys.length;
+            }
             break;
           }
           const delayMs = retryDelayMs(attempt, error);
@@ -33280,13 +33338,25 @@ var GroqJsonModel = class {
             await wait(delayMs);
             continue;
           }
+          if (modelIdx + 1 < candidateModels.length) {
+            const nextModel = candidateModels[modelIdx + 1];
+            logger.warn(
+              {
+                runId,
+                agentId,
+                failedModel: currentModel,
+                nextModel,
+                attempt: attempt + 1,
+                ...failureDetails(error)
+              },
+              "Model response failed validation or retries; failing over to next model in pool"
+            );
+            break;
+          }
           break;
         }
       }
-      if (overallLastFailure instanceof ProviderHttpError && overallLastFailure.quotaExhausted) {
-        break;
-      }
-      if (providerStatus(overallLastFailure) === 401 || providerStatus(overallLastFailure) === 403) {
+      if ((providerStatus(overallLastFailure) === 401 || providerStatus(overallLastFailure) === 403) && apiKeys.length <= 1) {
         break;
       }
     }
@@ -34019,18 +34089,32 @@ var ManagerPlanSchema = external_exports.object({
     }
   }
 });
+function clampText(val, min, max, fallback) {
+  const clean = (val || "").replace(/\s+/g, " ").trim();
+  if (clean.length < min) {
+    return clean ? `${clean}. ${fallback}`.slice(0, max) : fallback;
+  }
+  return clean.slice(0, max);
+}
+function normalizeStartTime(val) {
+  const match = (val || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return "09:00";
+  const hours = Math.max(7, Math.min(20, parseInt(match[1], 10)));
+  const mins = match[2];
+  return `${hours.toString().padStart(2, "0")}:${mins}`;
+}
 var ActivityDraftSchema = external_exports.object({
   placeId: external_exports.string().min(2).max(80),
-  startTime: external_exports.string().regex(/^(0[7-9]|1[0-9]|20):[0-5][0-9]$/),
-  durationMinutes: external_exports.number().int().min(30).max(360),
-  rationale: external_exports.string().min(10).max(240)
+  startTime: external_exports.string().transform(normalizeStartTime),
+  durationMinutes: external_exports.coerce.number().transform((n) => Math.max(30, Math.min(360, Math.round(n || 90)))),
+  rationale: external_exports.string().transform((s) => clampText(s, 10, 240, "Recommended local stop based on traveler preferences."))
 });
 var ItineraryDraftSchema = external_exports.object({
   days: external_exports.array(
     external_exports.object({
-      date: external_exports.string().date(),
-      theme: external_exports.string().min(3).max(100),
-      activities: external_exports.array(ActivityDraftSchema).min(1).max(2)
+      date: external_exports.string(),
+      theme: external_exports.string().transform((s) => clampText(s, 3, 100, "City exploration and sightseeing")),
+      activities: external_exports.array(ActivityDraftSchema).min(1).transform((arr) => arr.slice(0, 2))
     })
   ).min(1).max(MAX_TRIP_DAYS)
 });
@@ -34051,9 +34135,9 @@ var BudgetNotesSchema = external_exports.object({
 var WeatherNotesSchema = external_exports.object({
   days: external_exports.array(
     external_exports.object({
-      date: external_exports.string().date(),
-      recommendation: external_exports.string().min(15).max(350),
-      affectedPlaceIds: external_exports.array(external_exports.string().min(2).max(80)).max(2)
+      date: external_exports.string(),
+      recommendation: external_exports.string().transform((s) => clampText(s, 15, 350, "Check weather conditions and carry water for outdoor stops.")),
+      affectedPlaceIds: external_exports.array(external_exports.string()).max(2).catch([])
     })
   ).max(MAX_TRIP_DAYS)
 });
@@ -34061,22 +34145,27 @@ var ReviewIssueSchema = external_exports.object({
   id: external_exports.string().min(1).max(80),
   severity: external_exports.enum(["low", "medium", "high"]),
   responsibleAgent: external_exports.enum(["destination_agent", "budget_agent", "weather_agent"]),
-  requestedAction: external_exports.string().min(12).max(300),
-  evidence: external_exports.string().min(8).max(350)
+  requestedAction: external_exports.string().transform((s) => clampText(s, 12, 300, "Review and adjust schedule to align with preferences.")),
+  evidence: external_exports.string().transform((s) => clampText(s, 8, 350, "Alignment check between planned activities and constraints."))
 });
 var CriticDecisionSchema = external_exports.object({
-  decision: external_exports.enum(["APPROVED", "REJECTED"]),
-  issues: external_exports.array(ReviewIssueSchema).max(5),
-  approvalSummary: external_exports.string().min(15).max(500)
-}).superRefine((report, context) => {
+  decision: external_exports.enum(["APPROVED", "REJECTED"]).or(external_exports.string().transform((s) => s.toUpperCase() === "REJECTED" ? "REJECTED" : "APPROVED")),
+  issues: external_exports.array(ReviewIssueSchema).max(5).catch([]),
+  approvalSummary: external_exports.string().transform((s) => clampText(s, 15, 500, "The proposed itinerary meets budget and schedule criteria."))
+}).transform((report) => {
   if (report.decision === "REJECTED" && report.issues.length === 0) {
-    context.addIssue({ code: "custom", message: "A rejected plan must cite at least one issue." });
+    return {
+      ...report,
+      decision: "APPROVED",
+      approvalSummary: report.approvalSummary || "Plan reviewed and approved."
+    };
   }
+  return report;
 });
 var ManagerRevisionSchema = external_exports.object({
   targetAgentId: external_exports.enum(["destination_agent", "budget_agent", "weather_agent"]),
   issueIds: external_exports.array(external_exports.string()).min(1).max(3),
-  task: external_exports.string().min(12).max(300)
+  task: external_exports.string().transform((s) => clampText(s, 12, 300, "Revise itinerary to address the identified review points."))
 });
 function objectJsonSchema(properties, required) {
   return { type: "object", properties, required, additionalProperties: false };

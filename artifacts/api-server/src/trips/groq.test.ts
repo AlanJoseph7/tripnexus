@@ -254,4 +254,61 @@ describe("Groq request recovery", () => {
     expect(JSON.parse(String(firstInit.body)).model).toBe("openai/gpt-oss-120b");
     expect(JSON.parse(String(secondInit.body)).model).toBe("qwen/qwen3.8-27b");
   });
+
+  it("rotates to backup API key when multiple keys are supplied and primary key hits limit", async () => {
+    process.env.GROQ_API_KEYS = "key-primary,key-backup";
+    delete process.env.GROQ_DISABLE_MODEL_FALLBACK;
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(429, {
+        error: { code: "rate_limit_exceeded", message: "Rate limit reached for model" },
+      }))
+      .mockResolvedValueOnce(response(200, { choices: [{ message: { content: '{"ready":true}' } }] }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const pending = new GroqJsonModel().generateJson(
+      "key-rotation-test",
+      "trip_manager",
+      "Return JSON.",
+      "{}",
+      z.object({ ready: z.boolean() }),
+      { type: "object" },
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toEqual({ ready: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, firstInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect((firstInit.headers as Record<string, string>).Authorization).toBe("Bearer key-primary");
+    expect((secondInit.headers as Record<string, string>).Authorization).toBe("Bearer key-backup");
+    delete process.env.GROQ_API_KEYS;
+  });
+
+  it("fails over to backup model when primary model hits daily quota exhaustion", async () => {
+    delete process.env.GROQ_DISABLE_MODEL_FALLBACK;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(429, {
+        error: { code: "insufficient_quota", message: "You have exceeded your daily quota balance" },
+      }))
+      .mockResolvedValueOnce(response(200, { choices: [{ message: { content: '{"ready":true}' } }] }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const pending = new GroqJsonModel().generateJson(
+      "quota-failover-test",
+      "trip_manager",
+      "Return JSON.",
+      "{}",
+      z.object({ ready: z.boolean() }),
+      { type: "object" },
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toEqual({ ready: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, firstInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(String(firstInit.body)).model).toBe("openai/gpt-oss-120b");
+    expect(JSON.parse(String(secondInit.body)).model).toBe("qwen/qwen3.8-27b");
+  });
 });

@@ -7,6 +7,8 @@ export const GROQ_FALLBACK_MODELS = [
   "openai/gpt-oss-120b",
   "qwen/qwen3.8-27b",
   "openai/gpt-oss-20b",
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
 ];
 const STRICT_JSON_SCHEMA_MODELS = new Set([
   "llama-3.3-70b-versatile",
@@ -79,12 +81,45 @@ class ConcurrencyGate {
 const requestGate = new ConcurrencyGate(1);
 const callsByRun = new Map<string, Map<AgentId, number>>();
 
+export function getAvailableApiKeys(): string[] {
+  const raw = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || "";
+  return raw
+    .split(",")
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
+}
+
 function readJson(text: string) {
-  const trimmed = text.trim();
-  const withoutFence = trimmed.startsWith("```")
-    ? trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
-    : trimmed;
-  return JSON.parse(withoutFence) as unknown;
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  }
+  try {
+    return JSON.parse(cleaned) as unknown;
+  } catch {
+    const firstBrace = cleaned.indexOf("{");
+    const firstBracket = cleaned.indexOf("[");
+    let startIdx = -1;
+    let endIdx = -1;
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      startIdx = firstBrace;
+      endIdx = cleaned.lastIndexOf("}");
+    } else if (firstBracket !== -1) {
+      startIdx = firstBracket;
+      endIdx = cleaned.lastIndexOf("]");
+    }
+    if (startIdx !== -1 && endIdx > startIdx) {
+      const extracted = cleaned.slice(startIdx, endIdx + 1);
+      try {
+        return JSON.parse(extracted) as unknown;
+      } catch {
+        const sanitized = extracted.replace(/,\s*([}\]])/g, "$1");
+        return JSON.parse(sanitized) as unknown;
+      }
+    }
+    throw new SyntaxError("Failed to parse JSON from model output");
+  }
 }
 
 function nextCall(runId: string, agentId: AgentId) {
@@ -248,6 +283,7 @@ function isTimeout(error: unknown) {
 export class GroqJsonModel implements JsonModel {
   private activeModel: string = process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
   private modelCooldowns = new Map<string, number>();
+  private currentKeyIndex = 0;
 
   get model(): string {
     return this.activeModel;
@@ -258,14 +294,18 @@ export class GroqJsonModel implements JsonModel {
       return [process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL];
     }
     const configured = process.env.GROQ_MODEL?.trim();
-    const list = configured
-      ? [configured, ...GROQ_FALLBACK_MODELS.filter((m) => m !== configured)]
-      : [...GROQ_FALLBACK_MODELS];
+    const all = [
+      ...(configured ? [configured] : []),
+      ...GROQ_FALLBACK_MODELS,
+    ];
+    const unique = Array.from(new Set(all));
     const now = Date.now();
-    return list.sort((a, b) => {
+    return unique.sort((a, b) => {
       const aCd = this.modelCooldowns.get(a) ?? 0;
       const bCd = this.modelCooldowns.get(b) ?? 0;
-      return (aCd > now ? 1 : 0) - (bCd > now ? 1 : 0);
+      const aOnCd = aCd > now ? 1 : 0;
+      const bOnCd = bCd > now ? 1 : 0;
+      return aOnCd - bOnCd;
     });
   }
 
@@ -278,8 +318,8 @@ export class GroqJsonModel implements JsonModel {
     responseJsonSchema: Record<string, unknown>,
     onCallEvent?: (event: ModelCallEvent) => void,
   ): Promise<T> {
-    const apiKey = process.env.GROQ_API_KEY?.trim();
-    if (!apiKey) throw new GroqNotConfiguredError();
+    const apiKeys = getAvailableApiKeys();
+    if (apiKeys.length === 0) throw new GroqNotConfiguredError();
 
     nextCall(runId, agentId);
     const candidateModels = this.getCandidateModels();
@@ -289,6 +329,7 @@ export class GroqJsonModel implements JsonModel {
       const currentModel = candidateModels[modelIdx];
 
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        const currentApiKey = apiKeys[this.currentKeyIndex % apiKeys.length];
         try {
           const parsed = await requestGate.run(async () => {
             const now = Date.now();
@@ -318,7 +359,7 @@ export class GroqJsonModel implements JsonModel {
             const response = await fetch(GROQ_CHAT_COMPLETIONS_URL, {
               method: "POST",
               headers: {
-                Authorization: `Bearer ${apiKey}`,
+                Authorization: `Bearer ${currentApiKey}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
@@ -373,7 +414,7 @@ export class GroqJsonModel implements JsonModel {
             const validated = schema.parse(readJson(text));
             onCallEvent?.({ attempt: attempt + 1, status: "completed" });
             this.activeModel = currentModel;
-            await wait(200);
+            await wait(250);
             return validated;
           });
 
@@ -383,14 +424,30 @@ export class GroqJsonModel implements JsonModel {
           onCallEvent?.({ attempt: attempt + 1, status: "failed" });
           overallLastFailure = error;
 
+          const status = providerStatus(error);
+
           if (error instanceof ProviderHttpError && error.quotaExhausted) {
-            break;
-          }
-          if (providerStatus(error) === 401 || providerStatus(error) === 403) {
+            this.modelCooldowns.set(currentModel, Date.now() + 1_800_000);
+            logger.warn(
+              { runId, agentId, model: currentModel, nextModel: candidateModels[modelIdx + 1] },
+              "Model token quota exhausted; failing over to next candidate model",
+            );
+            if (apiKeys.length > 1) {
+              this.currentKeyIndex = (this.currentKeyIndex + 1) % apiKeys.length;
+              logger.info({ newKeyIndex: this.currentKeyIndex }, "Rotating Groq API key after quota limit");
+            }
             break;
           }
 
-          const status = providerStatus(error);
+          if (status === 401 || status === 403) {
+            if (apiKeys.length > 1) {
+              this.currentKeyIndex = (this.currentKeyIndex + 1) % apiKeys.length;
+              logger.warn({ failedKeyIndex: this.currentKeyIndex }, "API key rejected; switching to backup key");
+              continue;
+            }
+            break;
+          }
+
           if ((status === 429 || status === 404) && modelIdx + 1 < candidateModels.length) {
             const nextModel = candidateModels[modelIdx + 1];
             logger.warn(
@@ -404,6 +461,9 @@ export class GroqJsonModel implements JsonModel {
               },
               "Groq model hit rate limit or is unavailable; failing over to alternative model in pool",
             );
+            if (apiKeys.length > 1) {
+              this.currentKeyIndex = (this.currentKeyIndex + 1) % apiKeys.length;
+            }
             break;
           }
 
@@ -430,14 +490,27 @@ export class GroqJsonModel implements JsonModel {
             await wait(delayMs);
             continue;
           }
+
+          if (modelIdx + 1 < candidateModels.length) {
+            const nextModel = candidateModels[modelIdx + 1];
+            logger.warn(
+              {
+                runId,
+                agentId,
+                failedModel: currentModel,
+                nextModel,
+                attempt: attempt + 1,
+                ...failureDetails(error),
+              },
+              "Model response failed validation or retries; failing over to next model in pool",
+            );
+            break;
+          }
           break;
         }
       }
 
-      if (overallLastFailure instanceof ProviderHttpError && overallLastFailure.quotaExhausted) {
-        break;
-      }
-      if (providerStatus(overallLastFailure) === 401 || providerStatus(overallLastFailure) === 403) {
+      if ((providerStatus(overallLastFailure) === 401 || providerStatus(overallLastFailure) === 403) && apiKeys.length <= 1) {
         break;
       }
     }
