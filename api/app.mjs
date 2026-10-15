@@ -32982,8 +32982,25 @@ var ConcurrencyGate = class {
 var requestGate = new ConcurrencyGate(1);
 var callsByRun = /* @__PURE__ */ new Map();
 function getAvailableApiKeys() {
+  const keys = [];
   const raw = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || "";
-  return raw.split(",").map((k) => k.trim()).filter((k) => k.length > 0);
+  if (raw) {
+    keys.push(...raw.split(",").map((k) => k.trim()).filter((k) => k.length > 0));
+  }
+  for (const [keyName, value] of Object.entries(process.env)) {
+    if (!value || typeof value !== "string") continue;
+    if (keyName === "GROQ_API_KEY" || keyName === "GROQ_API_KEYS") continue;
+    const trimmed = value.trim();
+    if (trimmed.startsWith("gsk_")) {
+      for (const piece of trimmed.split(",")) {
+        const cleanPiece = piece.trim();
+        if (cleanPiece.startsWith("gsk_") && !keys.includes(cleanPiece)) {
+          keys.push(cleanPiece);
+        }
+      }
+    }
+  }
+  return keys;
 }
 function readJson(text) {
   let cleaned = text.trim();
@@ -33157,22 +33174,26 @@ function isTimeout(error) {
   return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
 }
 var GroqJsonModel = class {
-  activeModel = process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
+  activeModel = process.env.GROQ_MODEL?.trim() || process.env.GroqModel?.trim() || process.env.groq_model?.trim() || DEFAULT_GROQ_MODEL;
   modelCooldowns = /* @__PURE__ */ new Map();
+  unavailableModels = /* @__PURE__ */ new Set();
   currentKeyIndex = 0;
   get model() {
     return this.activeModel;
   }
   getCandidateModels() {
+    const configured = process.env.GROQ_MODEL?.trim() || process.env.GroqModel?.trim() || process.env.groq_model?.trim();
     if (process.env.GROQ_DISABLE_MODEL_FALLBACK === "true") {
-      return [process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL];
+      return [configured || DEFAULT_GROQ_MODEL];
     }
-    const configured = process.env.GROQ_MODEL?.trim();
     const all = [
       ...configured ? [configured] : [],
       ...GROQ_FALLBACK_MODELS
-    ];
+    ].filter((m) => !this.unavailableModels.has(m));
     const unique = Array.from(new Set(all));
+    if (unique.length === 0) {
+      return [configured || DEFAULT_GROQ_MODEL];
+    }
     const now = Date.now();
     return unique.sort((a, b) => {
       const aCd = this.modelCooldowns.get(a) ?? 0;
@@ -33188,8 +33209,11 @@ var GroqJsonModel = class {
     nextCall(runId, agentId);
     const candidateModels = this.getCandidateModels();
     let overallLastFailure;
+    let rateLimitFailure;
+    let lastAttemptedModel = this.activeModel;
     for (let modelIdx = 0; modelIdx < candidateModels.length; modelIdx += 1) {
       const currentModel = candidateModels[modelIdx];
+      lastAttemptedModel = currentModel;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const currentApiKey = apiKeys[this.currentKeyIndex % apiKeys.length];
         try {
@@ -33302,6 +33326,12 @@ var GroqJsonModel = class {
             }
             break;
           }
+          if (status2 === 404) {
+            this.unavailableModels.add(currentModel);
+          }
+          if (status2 === 429) {
+            rateLimitFailure = error;
+          }
           if ((status2 === 429 || status2 === 404) && modelIdx + 1 < candidateModels.length) {
             const nextModel = candidateModels[modelIdx + 1];
             logger.warn(
@@ -33360,7 +33390,10 @@ var GroqJsonModel = class {
         break;
       }
     }
-    logger.error({ runId, agentId, model: this.model, ...failureDetails(overallLastFailure) }, "Groq request failed");
+    if (providerStatus(overallLastFailure) === 404 && rateLimitFailure) {
+      overallLastFailure = rateLimitFailure;
+    }
+    logger.error({ runId, agentId, model: lastAttemptedModel, ...failureDetails(overallLastFailure) }, "Groq request failed");
     if (overallLastFailure instanceof GroqNotConfiguredError) throw overallLastFailure;
     const status = providerStatus(overallLastFailure);
     if (status === 401 || status === 403) {
@@ -33372,7 +33405,7 @@ var GroqJsonModel = class {
     }
     if (status === 404) {
       throw new GroqRequestError(
-        `Groq model "${this.model}" is unavailable to this API key. Set GROQ_MODEL to an active model enabled for this account.`,
+        `Groq model "${lastAttemptedModel || this.model}" is unavailable to this API key. Set GROQ_MODEL to an active model enabled for this account.`,
         502,
         "GROQ_MODEL_UNAVAILABLE"
       );
@@ -33449,10 +33482,12 @@ function getActiveModel() {
   return groqModel;
 }
 function getActiveModelInfo() {
+  const keys = getAvailableApiKeys();
+  const configuredModel = process.env.GROQ_MODEL?.trim() || process.env.GroqModel?.trim() || process.env.groq_model?.trim() || DEFAULT_GROQ_MODEL;
   return {
     provider: "groq",
-    model: process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL,
-    configured: Boolean(process.env.GROQ_API_KEY?.trim())
+    model: configuredModel,
+    configured: keys.length > 0
   };
 }
 
@@ -35471,7 +35506,9 @@ function offlineFallbackCode(error) {
       "GROQ_NETWORK_ERROR",
       "GROQ_REQUEST_REJECTED",
       "GROQ_INVALID_RESPONSE",
-      "GROQ_PROVIDER_REJECTED"
+      "GROQ_PROVIDER_REJECTED",
+      "GROQ_MODEL_UNAVAILABLE",
+      "GROQ_REQUEST_FAILED"
     ].includes(error.code) ? error.code : null;
   }
   return null;

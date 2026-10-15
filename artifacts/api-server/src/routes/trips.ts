@@ -108,6 +108,8 @@ export function offlineFallbackCode(error: unknown) {
       "GROQ_REQUEST_REJECTED",
       "GROQ_INVALID_RESPONSE",
       "GROQ_PROVIDER_REJECTED",
+      "GROQ_MODEL_UNAVAILABLE",
+      "GROQ_REQUEST_FAILED",
     ].includes(error.code)
       ? error.code
       : null;
