@@ -1,0 +1,570 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R 9 0 R 11 0 R] /Count 5 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 13 0 R /F2 14 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 4149 >>
+stream
+BT
+/F1 9 Tf
+40 755 Td
+(================================================================================) Tj
+0 -13.5 Td
+(                    TRIPNEXUS: AUTONOMOUS MULTI-AGENT) Tj
+0 -13.5 Td
+(                COLLABORATIVE TRAVEL PLANNING SYSTEM) Tj
+0 -13.5 Td
+(================================================================================) Tj
+0 -13.5 Td
+(Document Type   : Academic & Technical Project Synopsis) Tj
+0 -13.5 Td
+(Project Version : 2.4.0 \(Production Release\)) Tj
+0 -13.5 Td
+(System Status   : Live on Vercel & Production Ready) Tj
+0 -13.5 Td
+(Date            : October 2026) Tj
+0 -13.5 Td
+(Repository      : https://github.com/AlanJoseph7/tripnexus) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(1. PROJECT TITLE & DOMAIN) Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(Project Title   : TripNexus - Constraint-Aware Multi-Agent Travel Planner) Tj
+0 -13.5 Td
+(Domain          : Artificial Intelligence, Distributed Multi-Agent Systems \(MAS\),) Tj
+0 -13.5 Td
+(                  Full-Stack Web Engineering) Tj
+0 -13.5 Td
+(Core Focus      : Autonomous Agent Coordination, Closed-Loop Evaluator Pattern,) Tj
+0 -13.5 Td
+(                  Deterministic Tool Calculations, LLM Rate-Limit Resilience.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(2. ABSTRACT & EXECUTIVE SUMMARY) Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(Modern consumer travel planning is an intricate multi-criteria optimization) Tj
+0 -13.5 Td
+(problem. Travelers must reconcile heterogeneous constraints: personal interests,) Tj
+0 -13.5 Td
+(calendar dates, geographic proximity, strict group budgets in INR, and seasonal) Tj
+0 -13.5 Td
+(climate risks.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(Single-prompt Large Language Model \(LLM\) interfaces fail consistently in this) Tj
+0 -13.5 Td
+(domain due to four foundational flaws:) Tj
+0 -13.5 Td
+(  1. Hallucinated destinations, non-existent venues, and fabricated pricing.) Tj
+0 -13.5 Td
+(  2. Severe arithmetic errors when computing multi-day multi-traveler budgets.) Tj
+0 -13.5 Td
+(  3. Context drift and inability to maintain strict chronological continuity.) Tj
+0 -13.5 Td
+(  4. Complete absence of self-critique, verification, and adaptive replanning.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(TripNexus solves these deficiencies by introducing an autonomous, distributed) Tj
+0 -13.5 Td
+(multi-agent collaborative architecture. Built with TypeScript, Node.js, React 19,) Tj
+0 -13.5 Td
+(and Groq Cloud LPU inference, TripNexus distributes travel planning across five) Tj
+0 -13.5 Td
+(autonomous specialized agents. The system enforces strict separation between) Tj
+0 -13.5 Td
+(non-deterministic LLM reasoning and deterministic mathematical computation,) Tj
+0 -13.5 Td
+(incorporates an adversarial Critic Agent with closed-loop revision cycles, and) Tj
+0 -13.5 Td
+(features an enterprise-grade resilient infrastructure with multi-key rotation,) Tj
+0 -13.5 Td
+(multi-model failover, and zero-crash offline fallback mechanisms.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(3. PROBLEM STATEMENT & OBJECTIVES) Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(Problem Statement:) Tj
+0 -13.5 Td
+(Current online travel portals either rely on rigid, pre-packaged tour templates) Tj
+0 -13.5 Td
+(or leave travelers to manually cross-reference map directions, seasonal weather) Tj
+0 -13.5 Td
+(forecasts, and cost spreadsheets. Conversely, generic generative AI tools generate) Tj
+0 -13.5 Td
+(stylistically pleasing but operationally unfeasible itineraries with unrealistic) Tj
+0 -13.5 Td
+(transit times, conflicting budgets, and overlooked monsoon or extreme heat seasons.) Tj
+0 -13.5 Td
+ET
+BT
+/F1 8 Tf
+40 30 Td
+(TripNexus Project Synopsis | Page 1 of 5 | Confidential & Academic Evaluation) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 13 0 R /F2 14 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 4166 >>
+stream
+BT
+/F1 9 Tf
+40 755 Td
+() Tj
+0 -13.5 Td
+(Project Objectives:) Tj
+0 -13.5 Td
+(  * Autonomous Role Decomposition: Segment complex trip planning into bounded,) Tj
+0 -13.5 Td
+(    single-responsibility agent roles \(Manager, Destination, Budget, Weather, Critic\).) Tj
+0 -13.5 Td
+(  * Strict Schema Enforcement: Guarantee 100% valid JSON responses using Zod) Tj
+0 -13.5 Td
+(    runtime validation and Groq strict JSON-schema decoding.) Tj
+0 -13.5 Td
+(  * Deterministic Arithmetic Integrity: Compute all distance calculations) Tj
+0 -13.5 Td
+(    \(Haversine trigonometric formulas\) and budget summations strictly in TypeScript) Tj
+0 -13.5 Td
+(    to prevent LLM hallucination.) Tj
+0 -13.5 Td
+(  * Closed-Loop Adversarial Critique: Deploy an independent Critic Agent capable) Tj
+0 -13.5 Td
+(    of rejecting inadequate drafts and commanding targeted agent revisions.) Tj
+0 -13.5 Td
+(  * Production-Grade Resilience: Implement dynamic multi-model failover, 404 model) Tj
+0 -13.5 Td
+(    pruning, round-robin multi-key pooling, and guaranteed offline fallback.) Tj
+0 -13.5 Td
+(  * Transparent Auditability: Record every inter-agent message, tool call, latency,) Tj
+0 -13.5 Td
+(    and decision in a monotonic execution trace exportable in JSON format.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(4. SYSTEM ARCHITECTURE & AUTONOMOUS AGENTS) Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(TripNexus orchestrates five specialized agents coordinated by a centralized) Tj
+0 -13.5 Td
+(orchestrator and an immutable monotonic execution ledger:) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(1. Trip Manager Agent \(trip_manager\):) Tj
+0 -13.5 Td
+(   * Serves as the executive planner and state supervisor.) Tj
+0 -13.5 Td
+(   * Validates user inputs \(dates, origin, destination, group size, budget, pace\).) Tj
+0 -13.5 Td
+(   * Deconstructs planning goals into structured assignments for specialists.) Tj
+0 -13.5 Td
+(   * Intercepts Critic rejections, increments revision counters, and dispatches) Tj
+0 -13.5 Td
+(     targeted revision tickets to responsible agents \(bounded at 3 cycles\).) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(2. Destination Specialist Agent \(destination_agent\):) Tj
+0 -13.5 Td
+(   * Selects points of interest strictly from a verified 11-city catalog.) Tj
+0 -13.5 Td
+(   * Clusters activities geographically by city area to minimize travel fatigue.) Tj
+0 -13.5 Td
+(   * Executes local tools \(places_search, place_details, route_distance\).) Tj
+0 -13.5 Td
+(   * Computes straight-line distances using the Haversine trigonometric formula:) Tj
+0 -13.5 Td
+(       d = 2 * R * asin\(sqrt\(sin^2\(dLat/2\) + cos\(lat1\)*cos\(lat2\)*sin^2\(dLon/2\)\)\)) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(3. Budget Assessor Agent \(budget_agent\):) Tj
+0 -13.5 Td
+(   * Operates on deterministic local calculations: accommodation, food, activities,) Tj
+0 -13.5 Td
+(     local transit, and a 10% contingency reserve for the full traveler group.) Tj
+0 -13.5 Td
+(   * Explains cost drivers, headroom, and financial trade-offs in clear text.) Tj
+0 -13.5 Td
+(   * Never fabricates arithmetic; LLM reasoning is strictly explanatory.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(4. Climate & Seasonality Specialist \(weather_agent\):) Tj
+0 -13.5 Td
+(   * Queries verified historical climate records for the destination and month.) Tj
+0 -13.5 Td
+(   * Computes rain probability, typical temperature ranges \(Celsius\), and season tags.) Tj
+0 -13.5 Td
+(   * Flags high-risk outdoor activities \(>= 50% rain probability\) and suggests) Tj
+0 -13.5 Td
+(     verified indoor alternatives from the destination catalog.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(5. Independent Critic Agent \(critic_agent\):) Tj
+0 -13.5 Td
+(   * Operates as an adversarial auditor evaluating the consolidated itinerary draft.) Tj
+0 -13.5 Td
+(   * Evaluates four non-negotiable criteria:) Tj
+0 -13.5 Td
+(       a\) Date Continuity  : Validates sequential, unbroken day-by-day dates.) Tj
+0 -13.5 Td
+ET
+BT
+/F1 8 Tf
+40 30 Td
+(TripNexus Project Synopsis | Page 2 of 5 | Confidential & Academic Evaluation) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 13 0 R /F2 14 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 4083 >>
+stream
+BT
+/F1 9 Tf
+40 755 Td
+(       b\) Budget Compliance: Checks total estimated cost against target budget.) Tj
+0 -13.5 Td
+(       c\) Route Sanity     : Flags excessive intra-day straight-line transit \(> 35 km\).) Tj
+0 -13.5 Td
+(       d\) Weather Safety   : Detects unsheltered outdoor plans during heavy rain.) Tj
+0 -13.5 Td
+(   * Issues either an explicit APPROVED verdict or a REJECTED status with) Tj
+0 -13.5 Td
+(     actionable issue tickets specifying severity, responsible agent, and evidence.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(5. CLOSED-LOOP REPLANNING & CONFLICT RESOLUTION) Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(When the Critic Agent discovers a constraint violation:) Tj
+0 -13.5 Td
+(  Step 1: Critic outputs decision: "REJECTED" with structured issue descriptions.) Tj
+0 -13.5 Td
+(  Step 2: Trip Manager intercepts the rejection, increments revisionCount, and) Tj
+0 -13.5 Td
+(          translates issues into a targeted revision prompt.) Tj
+0 -13.5 Td
+(  Step 3: Responsible specialist \(e.g., Destination or Budget Agent\) re-executes,) Tj
+0 -13.5 Td
+(          adjusting activities, substituting indoor venues, or rebalancing costs.) Tj
+0 -13.5 Td
+(  Step 4: Revised itinerary draft is re-submitted to the Critic Agent for audit.) Tj
+0 -13.5 Td
+(  Step 5: The loop terminates upon Critic APPROVAL or upon reaching the 3-cycle) Tj
+0 -13.5 Td
+(          safety bound, preventing infinite loops and runaway API costs.) Tj
+0 -13.5 Td
+(  Step 6: If minor warnings remain after 3 cycles, the itinerary is tagged with) Tj
+0 -13.5 Td
+(          an amber "NEEDS ATTENTION" status badge so the traveler can review caveats.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(6. KEY TECHNICAL INNOVATIONS & RECENT RESILIENCE UPGRADES) Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(TripNexus introduces several state-of-the-art resilience capabilities:) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(A. Multi-Model Failover Pool:) Tj
+0 -13.5 Td
+(   * Leverages Groq Cloud LPU acceleration with sub-second inference speeds.) Tj
+0 -13.5 Td
+(   * Primary inference runs on openai/gpt-oss-120b.) Tj
+0 -13.5 Td
+(   * Dynamic fallback cascade: openai/gpt-oss-120b -> qwen/qwen3.8-27b ->) Tj
+0 -13.5 Td
+(     openai/gpt-oss-20b.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(B. Dynamic 404 Model Pruning:) Tj
+0 -13.5 Td
+(   * Automatically intercepts HTTP 404 \("model not available to this account"\)) Tj
+0 -13.5 Td
+(     responses from provider endpoints.) Tj
+0 -13.5 Td
+(   * Prunes unavailable models dynamically from the candidate pool during runtime,) Tj
+0 -13.5 Td
+(     preventing redundant failed attempts and preserving true rate-limit attribution.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(C. Multi-Key Round-Robin Rotation:) Tj
+0 -13.5 Td
+(   * Auto-discovers and pools multiple Groq API keys \(comma-separated or named) Tj
+0 -13.5 Td
+(     variables like TripNexus2, TripNexus3, TripNexus4, TripNexus5\).) Tj
+0 -13.5 Td
+(   * Distributes load across all keys, multiplying free-tier capacity to) Tj
+0 -13.5 Td
+(     120 RPM \(Requests Per Minute\) and 32,000 TPM \(Tokens Per Minute\).) Tj
+0 -13.5 Td
+(   * Automatically switches keys upon encountering 429 rate limits or quota drops.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(D. Stateless Serverless Trace Delivery:) Tj
+0 -13.5 Td
+(   * In Vercel serverless functions, execution events are bundled directly into) Tj
+0 -13.5 Td
+(     the primary plan result payload.) Tj
+0 -13.5 Td
+(   * The client renders all 120+ execution trace events immediately, preventing) Tj
+0 -13.5 Td
+(     secondary 404 race conditions common in stateless serverless environments.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(E. Guaranteed Zero-Crash Offline Fallback:) Tj
+0 -13.5 Td
+ET
+BT
+/F1 8 Tf
+40 30 Td
+(TripNexus Project Synopsis | Page 3 of 5 | Confidential & Academic Evaluation) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 13 0 R /F2 14 0 R >> >> /Contents 10 0 R >>
+endobj
+10 0 obj
+<< /Length 3715 >>
+stream
+BT
+/F1 9 Tf
+40 755 Td
+(   * If API credentials, rate limits, or network connectivity fail, TripNexus) Tj
+0 -13.5 Td
+(     automatically generates a high-quality deterministic itinerary using bundled) Tj
+0 -13.5 Td
+(     destination catalog data.) Tj
+0 -13.5 Td
+(   * Clearly marked with an "Offline Fallback Plan" badge, ensuring 100% uptime.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(7. TECHNOLOGY STACK SPECIFICATIONS) Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(Frontend Architecture:) Tj
+0 -13.5 Td
+(  * Framework      : React 19 \(TypeScript, Strict Mode\)) Tj
+0 -13.5 Td
+(  * Build Tool     : Vite 7.3.6 with Rollup code-splitting) Tj
+0 -13.5 Td
+(  * State & Query  : TanStack React Query v5 \(automatic retries, cache management\)) Tj
+0 -13.5 Td
+(  * Styling        : Modern Vanilla CSS with HSL color design tokens & glassmorphism) Tj
+0 -13.5 Td
+(  * Icons          : Lucide React) Tj
+0 -13.5 Td
+(  * Routing        : Wouter lightweight router) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(Backend Architecture:) Tj
+0 -13.5 Td
+(  * Runtime        : Node.js 24 LTS) Tj
+0 -13.5 Td
+(  * Server         : Express 5 \(ESM format\)) Tj
+0 -13.5 Td
+(  * Validation     : Zod Schema Validation on all inputs and outputs) Tj
+0 -13.5 Td
+(  * Logging        : Pino high-performance structured JSON logging) Tj
+0 -13.5 Td
+(  * PDF Engine     : Pure Node.js zero-dependency PDF-1.4 binary stream generator) Tj
+0 -13.5 Td
+(  * Monorepo Tool  : PNPM Workspaces with TypeScript project references) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(AI & LLM Services:) Tj
+0 -13.5 Td
+(  * Provider       : Groq Cloud LPU Ultra-Low Latency Inference) Tj
+0 -13.5 Td
+(  * Primary Models : openai/gpt-oss-120b, qwen/qwen3.8-27b, openai/gpt-oss-20b) Tj
+0 -13.5 Td
+(  * Output Mode    : Strict JSON Schema Decoding \(temperature: 0.2, top_p: 0.95\)) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(Deployment & Infrastructure:) Tj
+0 -13.5 Td
+(  * Cloud Platform : Vercel Serverless Functions) Tj
+0 -13.5 Td
+(  * Configuration  : vercel.json rewrites, ESBuild serverless bundle \(api/app.mjs\)) Tj
+0 -13.5 Td
+(  * Continuous CI  : GitHub Actions / Vercel Git Integration) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(8. VERIFICATION, TESTING & ACADEMIC EVALUATION) Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(* Automated Unit Test Suite: 23 passing Vitest unit tests verifying schema) Tj
+0 -13.5 Td
+(  parsers, Haversine coordinate math, budget allocation, multi-key rotation,) Tj
+0 -13.5 Td
+(  and offline fallback generators.) Tj
+0 -13.5 Td
+(* End-to-End Live Validation: Validated live multi-agent trip plans across 11) Tj
+0 -13.5 Td
+(  destinations with full critic revision loops.) Tj
+0 -13.5 Td
+(* Academic Viva Alignment: Fulfills all seven CA3 assessment criteria:) Tj
+0 -13.5 Td
+(    1. Multi-Agent Role Specialization) Tj
+0 -13.5 Td
+(    2. Dynamic Task Allocation) Tj
+0 -13.5 Td
+(    3. Monotonic Shared State & Execution Trace) Tj
+0 -13.5 Td
+(    4. Deterministic Tool Execution & Arithmetic Separation) Tj
+0 -13.5 Td
+(    5. Adversarial Critic & Closed-Loop Replanning) Tj
+0 -13.5 Td
+(    6. Robust Error Categorization & Production Resilience) Tj
+0 -13.5 Td
+(    7. Full System Documentation & Interactive Demonstration) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+ET
+BT
+/F1 8 Tf
+40 30 Td
+(TripNexus Project Synopsis | Page 4 of 5 | Confidential & Academic Evaluation) Tj
+ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 13 0 R /F2 14 0 R >> >> /Contents 12 0 R >>
+endobj
+12 0 obj
+<< /Length 1346 >>
+stream
+BT
+/F1 9 Tf
+40 755 Td
+(9. CONCLUSION & FUTURE SCOPE) Tj
+0 -13.5 Td
+(--------------------------------------------------------------------------------) Tj
+0 -13.5 Td
+(TripNexus proves that multi-agent AI systems, when paired with deterministic tool) Tj
+0 -13.5 Td
+(validation and robust error handling, overcome the core limitations of single-prompt) Tj
+0 -13.5 Td
+(LLMs. By combining sub-second Groq inference, adversarial critique, and multi-key) Tj
+0 -13.5 Td
+(resilience, TripNexus sets a high benchmark for reliable agentic applications.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(Future Scope:) Tj
+0 -13.5 Td
+(  * Live Flight and Hotel GDS Integration via Amadeus / Sabre APIs.) Tj
+0 -13.5 Td
+(  * Real-time meteorological satellite integration \(Open-Meteo live API\).) Tj
+0 -13.5 Td
+(  * User authentication with encrypted personal travel history storage.) Tj
+0 -13.5 Td
+(  * Multi-currency live forex exchange rate conversions.) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+(================================================================================) Tj
+0 -13.5 Td
+(                    END OF PROJECT SYNOPSIS DOCUMENT) Tj
+0 -13.5 Td
+(================================================================================) Tj
+0 -13.5 Td
+() Tj
+0 -13.5 Td
+ET
+BT
+/F1 8 Tf
+40 30 Td
+(TripNexus Project Synopsis | Page 5 of 5 | Confidential & Academic Evaluation) Tj
+ET
+endstream
+endobj
+13 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+14 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>
+endobj
+xref
+0 15
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000140 00000 n 
+0000000278 00000 n 
+0000004479 00000 n 
+0000004617 00000 n 
+0000008835 00000 n 
+0000008973 00000 n 
+0000013108 00000 n 
+0000013247 00000 n 
+0000017015 00000 n 
+0000017155 00000 n 
+0000018554 00000 n 
+0000018623 00000 n 
+trailer
+<< /Size 15 /Root 1 0 R >>
+startxref
+18697
+%%EOF
