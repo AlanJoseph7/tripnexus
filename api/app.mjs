@@ -35621,7 +35621,18 @@ router2.get("/runs/:runId/trace", (req, res) => {
     sendError(res, 400, "INVALID_RUN_ID", "A valid run ID is required.");
     return;
   }
-  const result = getRunTrace(parsed.data.runId);
+  let result = getRunTrace(parsed.data.runId);
+  if (!result) {
+    const run = getPlanningRun(parsed.data.runId);
+    if (run?.result) {
+      result = {
+        runId: run.result.runId,
+        mode: run.result.mode,
+        events: run.result.executionTrace,
+        messages: run.result.messages
+      };
+    }
+  }
   if (!result) {
     sendError(res, 404, "TRACE_NOT_FOUND", "This trace is unavailable or expired. Traces are cleared when the API restarts.");
     return;
